@@ -7,6 +7,7 @@
   --muted: #8b97a7;
   --accent: #ff7a2e;
   --accent-600: #ff8c47;
+  --accent-soft: rgba(255, 122, 46, 0.14);
   --danger: #ff6b6b;
 }
 
@@ -16,10 +17,41 @@
 
 body {
   margin: 0;
-  width: 340px;
+  width: 360px;
   background: var(--bg);
   color: var(--text);
   font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+/* App shell: a consistent, app-like height with the trust line pinned bottom. */
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 540px;
+}
+.body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.body.padded {
+  padding: 16px;
+}
+.trust {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+.trust svg {
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
 h1 {
@@ -27,7 +59,16 @@ h1 {
   margin: 0 0 12px;
 }
 
-input {
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 8px 0 4px;
+}
+
+input,
+textarea {
   width: 100%;
   background: var(--panel-2);
   border: 1px solid var(--border);
@@ -37,7 +78,11 @@ input {
   font: inherit;
   margin-bottom: 8px;
 }
-input:focus {
+textarea {
+  resize: vertical;
+}
+input:focus,
+textarea:focus {
   outline: none;
   border-color: var(--accent);
 }
@@ -48,9 +93,14 @@ button {
   border-radius: 7px;
   border: 1px solid transparent;
   padding: 8px 12px;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.04s ease;
+}
+button:active {
+  transform: translateY(1px);
 }
 button:disabled {
   opacity: 0.6;
+  cursor: default;
 }
 .primary {
   background: var(--accent);
@@ -58,6 +108,14 @@ button:disabled {
   width: 100%;
   border: none;
   font-weight: 600;
+}
+.primary:hover {
+  background: var(--accent-600);
+}
+.primary.small {
+  width: auto;
+  padding: 6px 12px;
+  font-size: 13px;
 }
 .ghost {
   background: transparent;
@@ -69,10 +127,23 @@ button:disabled {
 .ghost:hover {
   border-color: var(--accent);
 }
-
-.unlock {
-  padding: 16px;
+.ghost.full,
+.primary.full {
+  width: 100%;
+  margin-top: 8px;
 }
+.ghost.danger {
+  color: var(--danger);
+}
+.ghost.danger:hover {
+  border-color: var(--danger);
+}
+
+.center {
+  text-align: center;
+}
+
+/* Unlock */
 .unlock h1 {
   text-align: center;
 }
@@ -82,8 +153,15 @@ button:disabled {
   justify-content: center;
   gap: 8px;
 }
+.title.left {
+  justify-content: flex-start;
+}
 .title svg {
   color: var(--accent);
+}
+.tagline {
+  margin: -4px 0 16px;
+  font-size: 12px;
 }
 .brand svg {
   color: var(--accent);
@@ -98,7 +176,7 @@ button:disabled {
 .pwrow .reveal {
   position: absolute;
   right: 6px;
-  top: 50%;
+  top: calc(50% - 4px);
   transform: translateY(-50%);
   background: transparent;
   border: none;
@@ -107,21 +185,28 @@ button:disabled {
   font-weight: 600;
   padding: 5px 8px;
   border-radius: 7px;
-  cursor: pointer;
 }
 .pwrow .reveal:hover {
   color: var(--accent);
 }
 .link {
   display: block;
-  margin-top: 12px;
+  margin-top: 14px;
   color: var(--accent);
   font-size: 12px;
   text-align: center;
   text-decoration: none;
 }
+.link:hover {
+  text-decoration: underline;
+}
 
+/* Vault */
 .vault {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   padding: 12px;
 }
 .vault header {
@@ -133,16 +218,39 @@ button:disabled {
 .brand {
   font-weight: 700;
 }
+.header-actions {
+  display: flex;
+  gap: 6px;
+}
 .search {
   margin-bottom: 10px;
 }
 
+.pending {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.pending-text {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.pending-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.list-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
 ul {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 360px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -150,7 +258,7 @@ ul {
 li {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -158,6 +266,18 @@ li {
 }
 li.match {
   border-color: var(--accent);
+}
+.avatar {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
 }
 .badge {
   font-size: 10px;
@@ -175,6 +295,9 @@ li.match {
 }
 .name {
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .sub {
   color: var(--muted);
@@ -187,6 +310,22 @@ li.match {
   display: flex;
   gap: 5px;
   flex-shrink: 0;
+}
+
+/* Editor */
+.editor {
+  display: flex;
+  flex-direction: column;
+}
+.editor-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.editor-actions .ghost,
+.editor-actions .primary {
+  flex: 1;
+  text-align: center;
 }
 
 .muted {
@@ -202,7 +341,7 @@ li.match {
 }
 .toast {
   position: fixed;
-  bottom: 10px;
+  bottom: 44px;
   left: 50%;
   transform: translateX(-50%);
   background: var(--accent);

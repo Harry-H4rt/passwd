@@ -2,16 +2,29 @@
 // scripts. The background worker is the only place that holds the unlocked
 // session (user key); the popup talks to it over messages.
 
-import type { VaultItem } from "@passwd/api-client";
+import type { VaultItem, ItemFields } from "@passwd/api-client";
 
 export type ItemView = VaultItem;
 
-// popup -> background
+// A login captured on form submit, awaiting the user's decision to save it.
+export interface PendingSave {
+  url: string;
+  username: string;
+  password: string;
+}
+
+// popup -> background, plus captureLogin from the content script.
 export type BgRequest =
   | { type: "getState" }
   | { type: "unlock"; identifier: string; masterPassword: string }
   | { type: "lock" }
-  | { type: "getItems" };
+  | { type: "getItems" }
+  | { type: "addItem"; fields: ItemFields }
+  | { type: "updateItem"; item: VaultItem }
+  | { type: "deleteItem"; id: string }
+  | { type: "getPending" }
+  | { type: "dismissPending" }
+  | { type: "captureLogin"; url: string; username: string; password: string };
 
 export interface StateResponse {
   locked: boolean;
@@ -27,6 +40,18 @@ export interface ItemsResponse {
 export interface UnlockResponse {
   ok?: boolean;
   error?: string;
+}
+
+// Result of a vault mutation (add/update/delete).
+export interface MutationResponse {
+  ok?: boolean;
+  locked?: boolean;
+  error?: string;
+  item?: VaultItem;
+}
+
+export interface PendingResponse {
+  pending: PendingSave | null;
 }
 
 // popup -> content script (active tab)

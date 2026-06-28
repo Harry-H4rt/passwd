@@ -55,9 +55,10 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Autofill with **domain matching** (popup "Fill"; anti-phishing host match)
 - [x] Persist unlocked session across popup opens (chrome.storage.session) +
       idle auto-lock
-- [ ] Save-on-submit detection
-- [ ] Add/edit items from the popup
-- [ ] Custom icons
+- [x] Save-on-submit detection (content capture -> background pending -> popup
+      "save this login?" prompt)
+- [x] Add/edit/delete items from the popup
+- [x] Custom icons (deterministic monogram avatars; no remote favicon fetch)
 
 ## Phase 5 — Hardening & 2FA (in progress)
 

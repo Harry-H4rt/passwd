@@ -5,6 +5,20 @@ import { defineConfig } from "wxt";
 // real deployment, replace localhost with the production API origin.
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
+  vite: () => ({
+    plugins: [
+      {
+        // Vite stamps `crossorigin` on emitted <script>/<link>. On Firefox's
+        // moz-extension:// pages that forces a CORS fetch of same-origin
+        // extension files (no ACAO header) and the popup silently fails to load
+        // → blank white popup. Strip it; Chrome works fine without it too.
+        name: "passwd-strip-crossorigin",
+        transformIndexHtml(html: string) {
+          return html.replace(/ crossorigin/g, "");
+        },
+      },
+    ],
+  }),
   manifest: {
     name: "passwd",
     description: "Zero-knowledge password manager",

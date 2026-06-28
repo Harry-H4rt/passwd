@@ -1,0 +1,14 @@
+{
+  "name": "@passwd/site",
+  "private": true,
+  "type": "module",
+  "description": "passwd marketing + info site (Astro).",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "astro": "^4.15.0"
+  }
+}

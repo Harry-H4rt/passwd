@@ -1,0 +1,65 @@
+---
+import Base from "../layouts/Base.astro";
+const GITHUB_URL = "https://github.com/Harry-H4rt/passwd";
+
+const faqs = [
+  ["Do I need to give an email?", "No. You can create an account with a generated passphrase — no email, phone, or personal details. Email is an optional convenience, and even then it's only ever stored as a blinded hash."],
+  ["What happens if I forget my master password?", "There is no password reset — by design. Since only your device can decrypt your vault, no one (including us) can recover it. Keep your recovery passphrase somewhere safe."],
+  ["How is this different from my browser's password manager?", "Your vault is end-to-end encrypted and portable across browsers and devices, with a zero-knowledge server that can't read it — not tied to one browser account."],
+  ["Is it really zero-knowledge?", "Yes. Encryption and decryption happen on your device; the server only stores ciphertext. See the Security page for the details and the open-source code."],
+  ["Can I self-host it?", "Yes. The backend is a single static Go binary with SQLite. Run it yourself and point the apps at it."],
+  ["Is it finished?", "It's actively being built and is pre-audit. Try it, but hold off on storing irreplaceable secrets until the independent security review is complete."],
+];
+---
+
+<Base title="FAQ & Download — passwd" active="faq">
+  <section class="hero" style="padding-bottom:40px;">
+    <div class="container">
+      <span class="eyebrow">FAQ &amp; Download</span>
+      <h1>Questions, answered.</h1>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="container prose">
+      {faqs.map(([q, a]) => (
+        <details class="faq">
+          <summary>{q}</summary>
+          <p>{a}</p>
+        </details>
+      ))}
+    </div>
+  </section>
+
+  <section class="block band" id="download">
+    <div class="container">
+      <div class="section-head">
+        <h2>Get passwd</h2>
+        <p class="lead">Use it in your browser today; native apps are on the way.</p>
+      </div>
+      <div class="grid" style="max-width:860px;margin-inline:auto;">
+        <div class="card">
+          <span class="icon">🌐</span>
+          <h3>Web vault</h3>
+          <p>Open the vault in any modern browser — nothing to install.</p>
+          <p style="margin-top:14px;"><a class="btn btn-primary" href="http://localhost:5173">Open vault</a></p>
+        </div>
+        <div class="card">
+          <span class="icon">🧩</span>
+          <h3>Browser extension</h3>
+          <p>Chrome &amp; Firefox popup with autofill. Store listings coming soon.</p>
+          <p style="margin-top:14px;"><a class="btn btn-ghost" href={GITHUB_URL}>Build from source</a></p>
+        </div>
+        <div class="card">
+          <span class="icon">💻</span>
+          <h3>Desktop app</h3>
+          <p>A native app for Windows, macOS &amp; Linux — in the works.</p>
+          <p style="margin-top:14px;"><a class="btn btn-ghost" aria-disabled="true" href="#download">Coming soon</a></p>
+        </div>
+      </div>
+      <p style="text-align:center;margin-top:26px;">
+        Prefer to run it yourself? <a href={GITHUB_URL}>Self-host from the source →</a>
+      </p>
+    </div>
+  </section>
+</Base>

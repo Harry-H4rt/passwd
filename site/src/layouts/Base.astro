@@ -1,0 +1,63 @@
+---
+import "../styles/global.css";
+
+interface Props {
+  title?: string;
+  description?: string;
+  active?: string;
+}
+
+const {
+  title = "passwd — zero-knowledge password manager",
+  description = "A password manager that literally can't read your passwords. Zero-knowledge, end-to-end encrypted, open source.",
+  active = "",
+} = Astro.props;
+
+// Where "Open vault" points. Set to your deployed web-vault URL in production.
+const VAULT_URL = "http://localhost:5173";
+const GITHUB_URL = "https://github.com/Harry-H4rt/passwd";
+
+const links = [
+  { href: "/features", label: "Features", key: "features" },
+  { href: "/security", label: "Security", key: "security" },
+  { href: "/faq", label: "FAQ", key: "faq" },
+];
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <header class="nav">
+      <div class="container nav-inner">
+        <a class="brand" href="/">passwd 🔒</a>
+        <nav class="nav-links">
+          {links.map((l) => <a href={l.href} class={active === l.key ? "active" : ""}>{l.label}</a>)}
+        </nav>
+        <a class="btn btn-primary nav-cta" href={VAULT_URL}>Open vault</a>
+      </div>
+    </header>
+
+    <main>
+      <slot />
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-inner">
+        <p class="muted">passwd — zero-knowledge password manager. Your keys never leave your device.</p>
+        <div class="footer-links">
+          <a href="/features">Features</a>
+          <a href="/security">Security</a>
+          <a href="/faq">FAQ</a>
+          <a href={GITHUB_URL}>GitHub</a>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -13,5 +13,14 @@ export default defineConfig({
     action: {
       default_title: "passwd",
     },
+    // Emitted only on the Firefox target: gives the add-on a stable id so Firefox
+    // accepts it (temporary load + future signing). Dev id for now; AMO/signing
+    // is a Phase 6 item.
+    browser_specific_settings: {
+      gecko: {
+        id: "passwd@local.dev",
+        strict_min_version: "121.0",
+      },
+    },
   },
 });

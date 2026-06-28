@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   type Session,
   type VaultItem,
@@ -34,6 +34,8 @@ export function VaultScreen(props: {
   const [show2fa, setShow2fa] = useState(false);
   const [showData, setShowData] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
 
   function flash(msg: string) {
     setToast(msg);
@@ -72,10 +74,23 @@ export function VaultScreen(props: {
     }
   }
 
+  // Persist just the notes (inline edit from the detail pane).
+  async function saveNotes(item: VaultItem, notes: string) {
+    if (notes === item.notes) return;
+    try {
+      await saveItem(session, { ...item, notes });
+      await reload();
+      flash("Notes saved");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed.");
+    }
+  }
+
   async function handleDelete(item: VaultItem) {
     if (!confirm(`Delete "${item.name || "this item"}"?`)) return;
     try {
       await removeItem(session, item.id);
+      if (selectedId === item.id) setSelectedId(null);
       await reload();
       flash("Deleted");
     } catch (e) {
@@ -96,81 +111,113 @@ export function VaultScreen(props: {
       i.url.toLowerCase().includes(query.toLowerCase()),
   );
 
-  return (
-    <div className="app">
-      <header className="topbar">
-        <span className="brand">
-          <Icon name="lock" size={18} /> passwd
-        </span>
-        <span className="account" title={session.identifier}>
-          {session.identifier}
-        </span>
-        <button className="ghost" onClick={() => setShowData(true)}>
-          Import / export
-        </button>
-        <button className="ghost" onClick={() => setShow2fa(true)}>
-          2FA
-        </button>
-        <button className="ghost" onClick={props.onLock}>
-          Lock
-        </button>
-        <ThemeToggle />
-      </header>
+  const selected = items.find((i) => i.id === selectedId) ?? null;
 
-      {props.recovery && (
-        <div className="recovery">
-          <strong>Save your recovery passphrase.</strong> This is the only way back into your
-          account, and there is no reset. Store it somewhere safe (not in this vault).
-          <pre>{props.recovery}</pre>
-          <div className="row">
-            <button className="ghost" onClick={() => copy("recovery passphrase", props.recovery!)}>
-              Copy
+  return (
+    <div className="vault-layout">
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <Icon name="lock" size={20} /> <span>passwd</span>
+        </div>
+        <button className="primary add-btn" onClick={() => setEditing({ id: "", ...blankFields() })}>
+          + Add item
+        </button>
+        <nav className="sidebar-nav">
+          <button className="nav-item" onClick={() => setShowData(true)}>
+            <Icon name="copy" size={16} /> Import / export
+          </button>
+          <button className="nav-item" onClick={() => setShow2fa(true)}>
+            <Icon name="settings" size={16} /> Two-factor (2FA)
+          </button>
+        </nav>
+        <div className="sidebar-footer">
+          <button
+            className="account-btn"
+            onClick={() => {
+              setAccountOpen(true);
+              setSelectedId(null);
+            }}
+            title={session.identifier}
+          >
+            <Icon name="user" size={16} />
+            <span className="account-id">{session.identifier}</span>
+          </button>
+          <div className="sidebar-footer-row">
+            <button className="ghost" onClick={props.onLock}>
+              Lock
             </button>
-            <button className="ghost" onClick={props.onDismissRecovery}>
-              I've saved it
-            </button>
+            <ThemeToggle />
           </div>
         </div>
-      )}
+      </aside>
 
-      <div className="toolbar">
-        <input className="search" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
-        <button className="primary" onClick={() => setEditing({ id: "", ...blankFields() })}>
-          Add item
-        </button>
-      </div>
+      <section className="list-col">
+        <div className="search-field">
+          <Icon name="search" size={16} />
+          <input className="search" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
+        </div>
+        {error && <div className="error banner">{error}</div>}
+        {loading ? (
+          <p className="muted center-text">Decrypting vault...</p>
+        ) : filtered.length === 0 ? (
+          <p className="muted center-text">No items yet. Use "+ Add item" to store your first password.</p>
+        ) : (
+          <ul className="items">
+            {filtered.map((item) => (
+              <li
+                key={item.id}
+                className={"item" + (item.id === selectedId && !accountOpen ? " selected" : "")}
+                onClick={() => {
+                  setAccountOpen(false);
+                  setSelectedId(item.id);
+                }}
+              >
+                <div className="item-main">
+                  <div className="item-name">{item.name || "(unnamed)"}</div>
+                  <div className="item-sub">{item.username || item.url || "no details"}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
 
-      {error && <div className="error banner">{error}</div>}
-
-      {loading ? (
-        <p className="muted center-text">Decrypting vault...</p>
-      ) : filtered.length === 0 ? (
-        <p className="muted center-text">No items yet. Click "Add item" to store your first password.</p>
-      ) : (
-        <ul className="items">
-          {filtered.map((item) => (
-            <li key={item.id} className="item">
-              <div className="item-main">
-                <div className="item-name">{item.name || "(unnamed)"}</div>
-                <div className="item-sub">{item.username || item.url}</div>
-              </div>
-              <div className="item-actions">
-                {item.password && (
-                  <button className="ghost" onClick={() => copy("password", item.password)}>
-                    Copy
-                  </button>
-                )}
-                <button className="ghost" onClick={() => setEditing(item)}>
-                  Edit
-                </button>
-                <button className="ghost danger" onClick={() => handleDelete(item)}>
-                  Delete
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
+      <section className="detail-col">
+        {props.recovery && (
+          <div className="recovery">
+            <strong>Save your recovery passphrase.</strong> This is the only way back into your account, and there is no
+            reset. Store it somewhere safe (not in this vault).
+            <pre>{props.recovery}</pre>
+            <div className="row">
+              <button className="ghost" onClick={() => copy("recovery passphrase", props.recovery!)}>
+                Copy
+              </button>
+              <button className="ghost" onClick={props.onDismissRecovery}>
+                I've saved it
+              </button>
+            </div>
+          </div>
+        )}
+        {accountOpen ? (
+          <AccountPanel identifier={session.identifier} onCopy={copy} />
+        ) : selected ? (
+          <ItemDetail
+            key={selected.id}
+            item={selected}
+            onCopy={copy}
+            onEdit={() => setEditing(selected)}
+            onDelete={() => handleDelete(selected)}
+            onSaveNotes={(notes) => saveNotes(selected, notes)}
+          />
+        ) : (
+          !props.recovery && (
+            <div className="detail-empty">
+              <Icon name="lock" size={30} />
+              <p className="muted">Select an item to view its details.</p>
+            </div>
+          )
+        )}
+      </section>
 
       {editing && <ItemEditor item={editing} onCancel={() => setEditing(null)} onSave={handleSave} />}
       {show2fa && <TwoFactor session={session} onClose={() => setShow2fa(false)} />}
@@ -197,6 +244,126 @@ function stripId(item: VaultItem) {
 
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : "Something went wrong.";
+}
+
+function normalizeUrl(url: string): string {
+  return /^https?:\/\//i.test(url) ? url : `https://${url}`;
+}
+
+// Read-only detail view for the selected item. Password is masked until revealed.
+function ItemDetail(props: {
+  item: VaultItem;
+  onCopy: (label: string, value: string) => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  onSaveNotes: (notes: string) => void;
+}) {
+  const { item } = props;
+  const [reveal, setReveal] = useState(false);
+  const [notes, setNotes] = useState(item.notes);
+
+  return (
+    <div className="detail">
+      <div className="detail-head">
+        <h2>{item.name || "(unnamed)"}</h2>
+        <div className="detail-actions">
+          <button className="ghost" onClick={props.onEdit}>
+            <Icon name="edit" size={16} /> Edit
+          </button>
+          <button className="ghost danger" onClick={props.onDelete}>
+            <Icon name="trash" size={16} /> Delete
+          </button>
+        </div>
+      </div>
+
+      <div className="detail-body">
+        <div className="detail-fields">
+          {item.url && (
+            <DetailField label="Website" onCopy={() => props.onCopy("website", item.url)}>
+              <a className="val" href={normalizeUrl(item.url)} target="_blank" rel="noreferrer">
+                {item.url}
+              </a>
+            </DetailField>
+          )}
+          {item.username && (
+            <DetailField label="Username" onCopy={() => props.onCopy("username", item.username)}>
+              <span className="val">{item.username}</span>
+            </DetailField>
+          )}
+          {item.password && (
+            <DetailField
+              label="Password"
+              onCopy={() => props.onCopy("password", item.password)}
+              extra={
+                <button
+                  className="icon-btn"
+                  onClick={() => setReveal((r) => !r)}
+                  aria-label={reveal ? "Hide password" : "Reveal password"}
+                  title={reveal ? "Hide password" : "Reveal password"}
+                >
+                  <Icon name={reveal ? "eyeOff" : "eye"} size={16} />
+                </button>
+              }
+            >
+              <span className="val pw-val">
+                {reveal ? item.password : "•".repeat(Math.min(item.password.length, 16))}
+              </span>
+            </DetailField>
+          )}
+          {!item.url && !item.username && !item.password && (
+            <p className="muted">No login fields. Use Edit to add some.</p>
+          )}
+        </div>
+
+        <div className="detail-notes">
+          <label>Notes</label>
+          <textarea
+            className="notes-edit"
+            value={notes}
+            placeholder="Click to add notes..."
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={() => props.onSaveNotes(notes)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Account view: shows the full login identifier (which is truncated in the
+// sidebar) with a copy button.
+function AccountPanel(props: { identifier: string; onCopy: (label: string, value: string) => void }) {
+  return (
+    <div className="detail">
+      <div className="detail-head">
+        <h2>Account</h2>
+      </div>
+      <div className="detail-fields">
+        <DetailField label="Account identifier" onCopy={() => props.onCopy("identifier", props.identifier)}>
+          <span className="val val-wrap">{props.identifier}</span>
+        </DetailField>
+        <p className="muted">
+          This is your login handle (a private passphrase or email). It is blinded before it reaches the server, which
+          never sees it in the clear.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DetailField(props: { label: string; onCopy: () => void; extra?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="detail-field">
+      <label>{props.label}</label>
+      <div className="detail-value">
+        {props.children}
+        {props.extra}
+        <button className="icon-btn" onClick={props.onCopy} aria-label={`Copy ${props.label}`} title={`Copy ${props.label}`}>
+          <Icon name="copy" size={16} />
+        </button>
+      </div>
+    </div>
+  );
 }
 
 function ItemEditor(props: {

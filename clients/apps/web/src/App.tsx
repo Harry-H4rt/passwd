@@ -14,6 +14,9 @@ import { ThemeToggle } from "./components/ThemeToggle";
 // Lock (drop the in-memory user key) after this much inactivity.
 const IDLE_LOCK_MS = 15 * 60 * 1000;
 
+// Marketing site, for the "back to site" link. Override with VITE_SITE_URL.
+const SITE_URL = import.meta.env.VITE_SITE_URL ?? "http://localhost:4321";
+
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [recovery, setRecovery] = useState<string | null>(null);
@@ -131,6 +134,10 @@ function AuthScreen(props: {
       <div className="auth-toolbar">
         <ThemeToggle />
       </div>
+      <a className="back-link" href={SITE_URL}>
+        <Icon name="arrowLeft" size={16} />
+        Back to site
+      </a>
       <form className="card auth" onSubmit={submit}>
         <div className="brand-row">
           <Icon name="lock" size={22} />
@@ -148,20 +155,31 @@ function AuthScreen(props: {
         </div>
 
         <label>Account identifier</label>
-        <input
-          value={identifier}
-          onChange={(e) => {
-            setIdentifier(e.target.value);
-            setGenerated(false);
-          }}
-          placeholder={mode === "register" ? "generate a passphrase, or use an email" : "your passphrase or email"}
-          autoComplete="off"
-          spellCheck={false}
-        />
+        <div className="pwfield">
+          <input
+            value={identifier}
+            onChange={(e) => {
+              setIdentifier(e.target.value);
+              setGenerated(false);
+            }}
+            placeholder={mode === "register" ? "roll the dice, or use an email" : "your passphrase or email"}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {mode === "register" && (
+            <button
+              type="button"
+              className="reveal icon-only"
+              onClick={generate}
+              aria-label="Generate a private passphrase"
+              title="Generate a private passphrase"
+            >
+              <Icon name="dice" size={18} />
+            </button>
+          )}
+        </div>
         {mode === "register" && (
-          <button type="button" className="link" onClick={generate}>
-            Generate a private passphrase (recommended, no email needed)
-          </button>
+          <p className="hint">Roll the dice for a private passphrase, or type your own email. No email needed.</p>
         )}
 
         <label>Master password</label>

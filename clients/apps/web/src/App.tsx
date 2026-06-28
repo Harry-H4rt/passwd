@@ -1,11 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { type Session, registerAccount, loginAccount, newAccountId } from "@passwd/api-client";
 import { VaultScreen } from "./VaultScreen";
+
+// Lock (drop the in-memory user key) after this much inactivity.
+const IDLE_LOCK_MS = 15 * 60 * 1000;
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
   // The generated passphrase to show once, right after sign-up.
   const [recovery, setRecovery] = useState<string | null>(null);
+
+  // Auto-lock on idle: any activity resets a timer; on expiry we clear the
+  // session, which discards the decrypted user key from memory.
+  useEffect(() => {
+    if (!session) return;
+    let timer: number;
+    const lock = () => {
+      setRecovery(null);
+      setSession(null);
+    };
+    const reset = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(lock, IDLE_LOCK_MS);
+    };
+    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
+    events.forEach((e) => window.addEventListener(e, reset, { passive: true }));
+    reset();
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((e) => window.removeEventListener(e, reset));
+    };
+  }, [session]);
 
   if (session) {
     return (

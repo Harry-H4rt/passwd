@@ -1,15 +1,31 @@
-import { useEffect, useState } from "react";
-import { type Session, type VaultItem, loginAccount, loadVault } from "@passwd/api-client";
+import { useEffect, useMemo, useState } from "react";
+import {
+  type ItemView,
+  type StateResponse,
+  type ItemsResponse,
+  type UnlockResponse,
+  type FillMessage,
+  sendBackground,
+  hostMatches,
+} from "../../utils/protocol";
 
 const WEB_VAULT_URL = "http://localhost:5173";
 
 export function App() {
-  const [session, setSession] = useState<Session | null>(null);
-  if (!session) return <Unlock onUnlocked={setSession} />;
-  return <Vault session={session} onLock={() => setSession(null)} />;
+  const [loading, setLoading] = useState(true);
+  const [locked, setLocked] = useState(true);
+
+  useEffect(() => {
+    sendBackground<StateResponse>({ type: "getState" })
+      .then((s) => setLocked(s.locked))
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="vault"><p className="muted">…</p></div>;
+  return locked ? <Unlock onUnlocked={() => setLocked(false)} /> : <Vault onLock={() => setLocked(true)} />;
 }
 
-function Unlock(props: { onUnlocked: (s: Session) => void }) {
+function Unlock(props: { onUnlocked: () => void }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -20,9 +36,11 @@ function Unlock(props: { onUnlocked: (s: Session) => void }) {
     setError(null);
     setBusy(true);
     try {
-      props.onUnlocked(await loginAccount(identifier, password));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unlock failed.");
+      const res = await sendBackground<UnlockResponse>({ type: "unlock", identifier, masterPassword: password });
+      if (res.ok) props.onUnlocked();
+      else setError(res.error || "Unlock failed.");
+    } catch {
+      setError("Unlock failed.");
     } finally {
       setBusy(false);
     }
@@ -59,27 +77,74 @@ function Unlock(props: { onUnlocked: (s: Session) => void }) {
   );
 }
 
-function Vault(props: { session: Session; onLock: () => void }) {
-  const [items, setItems] = useState<VaultItem[]>([]);
+function Vault(props: { onLock: () => void }) {
+  const [items, setItems] = useState<ItemView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [copied, setCopied] = useState<string | null>(null);
+  const [tabHost, setTabHost] = useState("");
+  const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
-    loadVault(props.session)
-      .then(setItems)
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load vault."))
+    sendBackground<ItemsResponse>({ type: "getItems" })
+      .then((res) => {
+        if (res.locked) return props.onLock();
+        if (res.error) setError(res.error);
+        else setItems(res.items ?? []);
+      })
       .finally(() => setLoading(false));
-  }, [props.session]);
+
+    browser.tabs
+      .query({ active: true, currentWindow: true })
+      .then((tabs) => {
+        const url = tabs[0]?.url;
+        if (url) {
+          try {
+            setTabHost(new URL(url).hostname);
+          } catch {
+            /* non-web tab */
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function flash(label: string) {
+    setToast(label);
+    setTimeout(() => setToast(null), 1200);
+  }
 
   async function copy(label: string, value: string) {
     await navigator.clipboard.writeText(value);
-    setCopied(label);
-    setTimeout(() => setCopied(null), 1200);
+    void flash(`Copied ${label}`);
   }
 
-  const filtered = items.filter(
+  async function fill(item: ItemView) {
+    const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+    const tabId = tabs[0]?.id;
+    if (tabId == null) return;
+    const msg: FillMessage = { type: "fill", username: item.username, password: item.password };
+    try {
+      await browser.tabs.sendMessage(tabId, msg);
+      void flash("Filled");
+      window.close();
+    } catch {
+      void flash("No login form found");
+    }
+  }
+
+  async function lock() {
+    await sendBackground({ type: "lock" });
+    props.onLock();
+  }
+
+  // Items whose saved URL matches the current tab's domain come first.
+  const sorted = useMemo(() => {
+    const matches = (i: ItemView) => (tabHost ? hostMatches(i.url, tabHost) : false);
+    return [...items].sort((a, b) => Number(matches(b)) - Number(matches(a)));
+  }, [items, tabHost]);
+
+  const filtered = sorted.filter(
     (i) =>
       !query ||
       i.name.toLowerCase().includes(query.toLowerCase()) ||
@@ -91,7 +156,7 @@ function Vault(props: { session: Session; onLock: () => void }) {
     <div className="vault">
       <header>
         <span className="brand">passwd 🔒</span>
-        <button className="ghost" onClick={props.onLock}>
+        <button className="ghost" onClick={lock}>
           Lock
         </button>
       </header>
@@ -106,29 +171,39 @@ function Vault(props: { session: Session; onLock: () => void }) {
         </p>
       ) : (
         <ul>
-          {filtered.map((item) => (
-            <li key={item.id}>
-              <div className="info">
-                <div className="name">{item.name || "(unnamed)"}</div>
-                <div className="sub">{item.username || item.url}</div>
-              </div>
-              <div className="actions">
-                {item.username && (
-                  <button className="ghost" onClick={() => copy("user", item.username)} title="Copy username">
-                    User
-                  </button>
-                )}
-                {item.password && (
-                  <button className="ghost" onClick={() => copy("pass", item.password)} title="Copy password">
-                    Pass
-                  </button>
-                )}
-              </div>
-            </li>
-          ))}
+          {filtered.map((item) => {
+            const match = tabHost && hostMatches(item.url, tabHost);
+            return (
+              <li key={item.id} className={match ? "match" : ""}>
+                <div className="info">
+                  <div className="name">
+                    {item.name || "(unnamed)"} {match && <span className="badge">this site</span>}
+                  </div>
+                  <div className="sub">{item.username || item.url}</div>
+                </div>
+                <div className="actions">
+                  {item.password && (
+                    <button className="ghost" onClick={() => fill(item)} title="Fill this page">
+                      Fill
+                    </button>
+                  )}
+                  {item.username && (
+                    <button className="ghost" onClick={() => copy("username", item.username)}>
+                      User
+                    </button>
+                  )}
+                  {item.password && (
+                    <button className="ghost" onClick={() => copy("password", item.password)}>
+                      Pass
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
-      {copied && <div className="toast">Copied {copied === "user" ? "username" : "password"}</div>}
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }

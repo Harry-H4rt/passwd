@@ -31,6 +31,7 @@ func newTestServer(t *testing.T) *httptest.Server {
 		JWTSecret:           "test-secret",
 		IdentifierPepper:    "test-pepper",
 		AuthRateLimitPerMin: 10000, // don't rate-limit the test client
+		AllowedOrigins:      []string{"http://localhost:5173"},
 	}
 	srv := New(cfg, store, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ts := httptest.NewServer(srv.Routes())
@@ -92,6 +93,37 @@ func login(c *client, id, mph string) (access, refresh string) {
 		c.t.Fatalf("login %s: got %d", id, code)
 	}
 	return body["accessToken"].(string), body["refreshToken"].(string)
+}
+
+func TestCORS(t *testing.T) {
+	ts := newTestServer(t)
+
+	// Preflight from an allowed origin is answered with the echoed origin.
+	req, _ := http.NewRequest(http.MethodOptions, ts.URL+"/api/auth/login", nil)
+	req.Header.Set("Origin", "http://localhost:5173")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("preflight status = %d want 204", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "http://localhost:5173" {
+		t.Fatalf("ACAO = %q want the allowed origin", got)
+	}
+
+	// A disallowed origin gets no CORS header.
+	req2, _ := http.NewRequest(http.MethodOptions, ts.URL+"/api/auth/login", nil)
+	req2.Header.Set("Origin", "https://evil.example")
+	resp2, err := http.DefaultClient.Do(req2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if got := resp2.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Fatalf("disallowed origin should get no ACAO, got %q", got)
+	}
 }
 
 func TestFullFlow(t *testing.T) {

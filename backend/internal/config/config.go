@@ -4,6 +4,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -18,6 +19,10 @@ type Config struct {
 	// brute-force defense is the per-account lockout; this is NAT-friendly spam
 	// protection, so keep it generous.
 	AuthRateLimitPerMin int
+	// AllowedOrigins is the CORS allowlist for browser clients on other origins
+	// (e.g. the web vault served from a different host). The API is bearer-token
+	// based (no cookies), so credentials are not allowed and "*" is unnecessary.
+	AllowedOrigins []string
 }
 
 func Load() Config {
@@ -28,6 +33,7 @@ func Load() Config {
 		DBPath:              getenv("PASSWD_DB", "data/passwd.db"),
 		IdentifierPepper:    getenv("PASSWD_IDENTIFIER_PEPPER", "dev-only-insecure-pepper-change-me"),
 		AuthRateLimitPerMin: getenvInt("PASSWD_AUTH_RATELIMIT_PER_MIN", 60),
+		AllowedOrigins:      splitList(getenv("PASSWD_ALLOWED_ORIGINS", "http://localhost:5173")),
 	}
 }
 
@@ -47,4 +53,15 @@ func getenvInt(key string, fallback int) int {
 		}
 	}
 	return fallback
+}
+
+// splitList parses a comma-separated env value into a trimmed, non-empty slice.
+func splitList(v string) []string {
+	var out []string
+	for _, p := range strings.Split(v, ",") {
+		if s := strings.TrimSpace(p); s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

@@ -40,6 +40,29 @@ func userIDFrom(ctx context.Context) (string, bool) {
 	return id, ok && id != ""
 }
 
+// --- CORS -------------------------------------------------------------------
+
+// cors echoes the request Origin when it is on the allowlist and answers
+// preflight OPTIONS. The API uses bearer tokens (no cookies), so credentials are
+// not allowed and a wildcard origin is unnecessary.
+func (s *Server) cors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" && s.allowedOrigins[origin] {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			w.Header().Set("Access-Control-Max-Age", "600")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // --- IP rate limiting (fixed window, in-memory/ephemeral) -------------------
 
 type rateLimiter struct {

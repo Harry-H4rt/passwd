@@ -68,7 +68,8 @@ runnable and tested. **Security review gates ship before real user data.**
       enforced in production
 - [x] Idle auto-lock (web vault + extension)
 - [ ] Emergency access / recovery codes (user-controlled, never server reset)
-- [ ] Secrets management for deploy (documented in docs/DEPLOYMENT.md)
+- [x] Secrets management for deploy: `*_FILE` support (Docker/K8s secrets) +
+      generation/rotation docs in docs/DEPLOYMENT.md
 - [ ] **Independent crypto + app security audit** (gate before real users)
 
 ## Phase 6 — Site & distribution (in progress)

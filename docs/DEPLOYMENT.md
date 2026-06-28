@@ -11,8 +11,8 @@ dev defaults:
 | Env var | Notes |
 |---|---|
 | `PASSWD_ENV=production` | enables HSTS; enforces non-default secrets |
-| `PASSWD_JWT_SECRET` | `openssl rand -hex 32` |
-| `PASSWD_IDENTIFIER_PEPPER` | `openssl rand -hex 32` — **never change it** (rotating orphans all accounts) |
+| `PASSWD_JWT_SECRET` | `openssl rand -hex 32` (or `PASSWD_JWT_SECRET_FILE`) |
+| `PASSWD_IDENTIFIER_PEPPER` | `openssl rand -hex 32` (or `..._FILE`) — **never change it** (rotating orphans all accounts) |
 | `PASSWD_DB` | persistent path, e.g. `/var/lib/passwd/passwd.db` |
 | `PASSWD_ALLOWED_ORIGINS` | your web-vault origin, e.g. `https://vault.example.com` |
 | `PASSWD_ADDR` | listen address |
@@ -35,6 +35,55 @@ The image runs as a non-root user (uid 10001) and stores the DB at
 `/data/passwd.db`. A fresh named volume inherits that ownership; if you bind-mount
 a host path instead, `chown 10001:10001` it first. Still terminate TLS in front of
 the container.
+
+### Secrets management
+
+There are two secrets that matter: `PASSWD_JWT_SECRET` and
+`PASSWD_IDENTIFIER_PEPPER`. Generate each as a long random value:
+
+```bash
+openssl rand -hex 32
+```
+
+Provide them by whichever fits your platform — the server checks them in this
+order:
+
+1. **`<NAME>_FILE`** (preferred for prod): a path to a file containing the secret.
+   This is how Docker/Kubernetes secrets are mounted, so the value never sits in
+   the environment or the compose file. Example:
+   `PASSWD_JWT_SECRET_FILE=/run/secrets/jwt_secret`.
+2. **`<NAME>`**: the secret directly in the environment.
+3. Built-in dev default — **rejected at startup when `PASSWD_ENV=production`.**
+
+Docker secrets with compose:
+
+```yaml
+services:
+  backend:
+    environment:
+      PASSWD_JWT_SECRET_FILE: /run/secrets/jwt_secret
+      PASSWD_IDENTIFIER_PEPPER_FILE: /run/secrets/identifier_pepper
+    secrets: [jwt_secret, identifier_pepper]
+secrets:
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+  identifier_pepper:
+    file: ./secrets/identifier_pepper.txt
+```
+
+For the simpler `.env` flow, keep `.env` out of git (it already is) and
+`chmod 600` it.
+
+**Rotation:**
+- `PASSWD_JWT_SECRET` — safe to rotate. Outstanding access tokens stop verifying,
+  but clients transparently mint new ones via their (separately stored) refresh
+  tokens; worst case a user signs in again. No data loss.
+- `PASSWD_IDENTIFIER_PEPPER` — **never rotate after launch.** It is mixed into the
+  HMAC that blinds every account identifier; changing it makes all existing
+  accounts unfindable (effectively orphaned). Treat it as permanent and back it up.
+
+Back up the DB file regularly — it holds only ciphertext and password verifiers,
+never plaintext or master passwords.
 
 ## Web vault (production)
 

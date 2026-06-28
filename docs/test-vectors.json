@@ -1,0 +1,32 @@
+{
+  "_comment": "Known-answer vectors for @passwd/crypto. Both the TS package and the Go reference impl must reproduce these exactly. Regenerate via `npm -w @passwd/crypto run gen-vectors`.",
+  "inputs": {
+    "password": "correct horse battery staple",
+    "identifier": "alice@example.com",
+    "normalizedIdentifier": "alice@example.com",
+    "pbkdf2": {
+      "type": "pbkdf2",
+      "iterations": 100000
+    },
+    "argon2id": {
+      "type": "argon2id",
+      "iterations": 2,
+      "memoryMiB": 8,
+      "parallelism": 1
+    },
+    "aesKeyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "aesNonceHex": "0102030405060708090a0b0c",
+    "aesPlaintext": "vault item: github.com / alice / hunter2",
+    "hkdfInfoEnc": "enc",
+    "hkdfInfoMac": "mac"
+  },
+  "expected": {
+    "masterKeyPbkdf2Hex": "cb235fd1233ecd275d1dc2744ea654f7f88a3ec0979b1bca0c4c580112f64e63",
+    "masterKeyArgon2idHex": "f28ac28adf71ddb3bc88f7fe6d6eb65f9a0002b5ea2715babb8fa905e5b46e7a",
+    "stretchedEncKeyHex": "a5b6666a8d81e5acc3bc0f8a938853b308fa81954b2f59f28192ad980fccaa5f",
+    "stretchedMacKeyHex": "234aedb53432bf14b2f86fc62d772c25933815bda89462d658799e1195e11f2f",
+    "masterPasswordHashB64": "ij4bpg+9sHwyc9ipLMipC5BiUug2hc9KWk8nXWxhz2o=",
+    "aesGcmCiphertextHex": "738b2fb998b499f229cf5967777a9e403721cf9df80070ea813e954dfdd356eaa48ceeb11ad09eadc51dc2c36cc33d2c1c96e5a48471d733",
+    "encString": "1.AQIDBAUGBwgJCgsM|c4svuZi0mfIpz1lnd3qeQDchz534AHDqgT6VTf3TVuqkjO6xGtCercUdwsNswz0sHJblpIRx1zM="
+  }
+}

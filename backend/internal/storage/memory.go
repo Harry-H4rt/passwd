@@ -2,47 +2,44 @@ package storage
 
 import (
 	"context"
-	"strings"
 	"sync"
 )
 
-// Memory is an in-memory Store for local development and tests. Single-tenant
-// friendly; not durable. Phase 2 adds a SQL-backed implementation.
+// Memory is an in-memory Store for tests and ephemeral runs. Not durable.
 type Memory struct {
-	mu      sync.RWMutex
-	users   map[string]User   // id -> User
-	byEmail map[string]string // normalized email -> id
-	ciphers map[string]Cipher // id -> Cipher
+	mu       sync.RWMutex
+	users    map[string]User         // id -> User
+	byIDHash map[string]string       // identifier hash -> user id
+	ciphers  map[string]Cipher       // id -> Cipher
+	refresh  map[string]RefreshToken // token hash -> RefreshToken
 }
 
 func NewMemory() *Memory {
 	return &Memory{
-		users:   make(map[string]User),
-		byEmail: make(map[string]string),
-		ciphers: make(map[string]Cipher),
+		users:    make(map[string]User),
+		byIDHash: make(map[string]string),
+		ciphers:  make(map[string]Cipher),
+		refresh:  make(map[string]RefreshToken),
 	}
 }
 
 var _ Store = (*Memory)(nil)
 
-func normEmail(e string) string { return strings.ToLower(strings.TrimSpace(e)) }
-
 func (m *Memory) CreateUser(_ context.Context, u User) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	key := normEmail(u.Email)
-	if _, exists := m.byEmail[key]; exists {
+	if _, exists := m.byIDHash[u.IdentifierHash]; exists {
 		return ErrConflict
 	}
 	m.users[u.ID] = u
-	m.byEmail[key] = u.ID
+	m.byIDHash[u.IdentifierHash] = u.ID
 	return nil
 }
 
-func (m *Memory) GetUserByEmail(_ context.Context, email string) (User, error) {
+func (m *Memory) GetUserByIdentifierHash(_ context.Context, identifierHash string) (User, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	id, ok := m.byEmail[normEmail(email)]
+	id, ok := m.byIDHash[identifierHash]
 	if !ok {
 		return User{}, ErrNotFound
 	}
@@ -102,3 +99,29 @@ func (m *Memory) ListCiphers(_ context.Context, userID string) ([]Cipher, error)
 	}
 	return out, nil
 }
+
+func (m *Memory) CreateRefreshToken(_ context.Context, rt RefreshToken) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.refresh[rt.TokenHash] = rt
+	return nil
+}
+
+func (m *Memory) GetRefreshToken(_ context.Context, tokenHash string) (RefreshToken, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	rt, ok := m.refresh[tokenHash]
+	if !ok {
+		return RefreshToken{}, ErrNotFound
+	}
+	return rt, nil
+}
+
+func (m *Memory) DeleteRefreshToken(_ context.Context, tokenHash string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.refresh, tokenHash)
+	return nil
+}
+
+func (m *Memory) Close() error { return nil }

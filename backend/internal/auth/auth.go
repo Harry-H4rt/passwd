@@ -1,17 +1,22 @@
-// Package auth holds authentication policy: default KDF parameters the client
-// should use, and (Phase 2) the server-side password verifier and token issuing.
+// Package auth holds authentication policy: default KDF parameters, identifier
+// blinding, the server-side password verifier (Argon2id), and token issuing.
 //
-// Reminder on the zero-knowledge contract: the server receives the client's
-// "master password hash" only as a login credential, then stores
-// Argon2id(masterPasswordHash, randomSalt). It never sees the master password or
-// the master key. See docs/CRYPTO.md.
+// Zero-knowledge contract: the server receives the client's "master password
+// hash" only as a login credential and stores Argon2id(it). It never sees the
+// master password, the master key, or a plaintext identifier. See docs/CRYPTO.md.
 package auth
 
-import "github.com/passwd-app/server/internal/storage"
+import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 
-// DefaultKDF is what new accounts and unknown-email prelogin responses use.
-// Argon2id parameters follow Bitwarden's defaults (m=64MiB, t=3, p=4), which
-// meet/exceed OWASP guidance.
+	"github.com/passwd-app/server/internal/crypto"
+	"github.com/passwd-app/server/internal/storage"
+)
+
+// DefaultKDF is what new accounts and unknown-identifier prelogin responses use.
+// Mirrors the client's DEFAULT_KDF and meets OWASP guidance.
 var DefaultKDF = storage.KDFParams{
 	Type:        "argon2id",
 	Iterations:  3,
@@ -19,5 +24,12 @@ var DefaultKDF = storage.KDFParams{
 	Parallelism: 4,
 }
 
-// TODO(Phase 2): HashVerifier(masterPasswordHash) using golang.org/x/crypto/argon2
-// and VerifyVerifier(stored, provided); IssueTokens / refresh with JWT.
+// BlindIdentifier maps a login handle (passphrase or email) to the value stored
+// and looked up server-side: HMAC-SHA256(pepper, normalize(identifier)). The
+// pepper (a server secret) means a stolen database alone cannot confirm guessed
+// identifiers, and the plaintext identifier is never persisted.
+func BlindIdentifier(pepper, identifier string) string {
+	mac := hmac.New(sha256.New, []byte(pepper))
+	mac.Write([]byte(crypto.NormalizeIdentifier(identifier)))
+	return hex.EncodeToString(mac.Sum(nil))
+}

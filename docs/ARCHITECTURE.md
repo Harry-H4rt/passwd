@@ -73,19 +73,23 @@ Per the decision to start single-tenant but grow into SaaS:
 - Keep billing, org/team sharing, and admin out of the core until the
   single-tenant product is solid (see roadmap phases).
 
-## API surface (initial sketch — Bitwarden-compatible shape)
+## API surface (implemented — Phase 2)
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET`  | `/healthz` | liveness |
-| `POST` | `/api/accounts/register` | create account (stores Protected User Key, KDF params, verifier) |
-| `POST` | `/api/accounts/prelogin` | returns KDF params for an email (so client can derive) |
-| `POST` | `/api/auth/login` | exchange master-password-hash for tokens |
-| `POST` | `/api/auth/refresh` | refresh access token |
-| `GET`  | `/api/sync` | full encrypted vault snapshot |
-| `POST` | `/api/ciphers` | create encrypted item |
-| `PUT`  | `/api/ciphers/{id}` | update encrypted item |
-| `DELETE` | `/api/ciphers/{id}` | delete item |
+Auth routes are rate-limited per IP; vault routes require a bearer access token.
+The `identifier` is the login handle (passphrase or email); the server blinds it
+to an HMAC and never stores it in the clear.
 
-> Mirroring Bitwarden's API *shapes* (not copying code) keeps a path open to
-> interoperate with existing tooling later, but is not a hard requirement.
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET`  | `/healthz` | — | liveness |
+| `POST` | `/api/accounts/prelogin` | — | returns KDF params for an `identifier` (defaults if unknown — no existence oracle) |
+| `POST` | `/api/accounts/register` | — | create account (stores blinded identifier, KDF params, Argon2id verifier, Protected User Key) |
+| `POST` | `/api/auth/login` | — | `identifier` + master-password-hash → access + refresh tokens, Protected User Key, KDF |
+| `POST` | `/api/auth/refresh` | — | rotate refresh token → new token pair |
+| `GET`  | `/api/sync` | bearer | full encrypted vault snapshot (`{ciphers: [...]}`) |
+| `POST` | `/api/ciphers` | bearer | create opaque encrypted item |
+| `PUT`  | `/api/ciphers/{id}` | bearer | update opaque encrypted item |
+| `DELETE` | `/api/ciphers/{id}` | bearer | delete item |
+
+> Tokens: stateless **HS256 JWT** access tokens (15 min) implemented with the Go
+> std lib; opaque **refresh tokens** (30 d) stored hashed and rotated on every use.

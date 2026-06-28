@@ -13,6 +13,7 @@ import {
   utf8,
 } from "./primitives.js";
 import { EncType, parseEncString, serializeEncString } from "./encstring.js";
+import { normalizeIdentifier } from "./identifier.js";
 
 const USER_KEY_BYTES = 64; // 32 for AES-GCM + 32 reserved (per-item / CBC-HMAC compat)
 
@@ -21,13 +22,15 @@ export interface StretchedKey {
   macKey: Uint8Array; // 32 bytes — reserved for CBC-HMAC compatibility
 }
 
-// Master Key = KDF(masterPassword, salt = lowercase(email)). Never leaves the device.
+// Master Key = KDF(masterPassword, salt = normalize(identifier)). The identifier
+// is the account's login handle (generated passphrase or email). Never leaves the
+// device.
 export async function deriveMasterKey(
   masterPassword: string,
-  email: string,
+  identifier: string,
   params: KdfParams,
 ): Promise<Uint8Array> {
-  return deriveKey(masterPassword, email.trim().toLowerCase(), params);
+  return deriveKey(masterPassword, normalizeIdentifier(identifier), params);
 }
 
 // Master Password Hash — the authentication credential sent to the server. One
@@ -82,7 +85,9 @@ export async function decryptItem(userKey: Uint8Array, encString: string): Promi
 // --- High-level flows -------------------------------------------------------
 
 export interface RegistrationBundle {
-  email: string;
+  // The plaintext identifier. The client sends this to the server only as a login
+  // credential; the server immediately blinds it (HMAC) and never stores it raw.
+  identifier: string;
   kdf: KdfParams;
   masterPasswordHash: string;
   protectedUserKey: string;
@@ -90,29 +95,29 @@ export interface RegistrationBundle {
 
 // Build everything the server needs at registration, plus the in-memory user key.
 export async function buildRegistration(
-  email: string,
+  identifier: string,
   masterPassword: string,
   params: KdfParams,
 ): Promise<{ bundle: RegistrationBundle; userKey: Uint8Array }> {
-  const masterKey = await deriveMasterKey(masterPassword, email, params);
+  const masterKey = await deriveMasterKey(masterPassword, identifier, params);
   const stretched = await stretchMasterKey(masterKey);
   const userKey = generateUserKey();
   const protectedUserKey = await wrapUserKey(stretched, userKey);
   const masterPasswordHash = await deriveMasterPasswordHash(masterKey, masterPassword);
   return {
-    bundle: { email: email.trim().toLowerCase(), kdf: params, masterPasswordHash, protectedUserKey },
+    bundle: { identifier: normalizeIdentifier(identifier), kdf: params, masterPasswordHash, protectedUserKey },
     userKey,
   };
 }
 
 // Reproduce the user key + auth hash at login/unlock time.
 export async function unlock(
-  email: string,
+  identifier: string,
   masterPassword: string,
   params: KdfParams,
   protectedUserKey: string,
 ): Promise<{ userKey: Uint8Array; masterPasswordHash: string }> {
-  const masterKey = await deriveMasterKey(masterPassword, email, params);
+  const masterKey = await deriveMasterKey(masterPassword, identifier, params);
   const stretched = await stretchMasterKey(masterKey);
   const userKey = await unwrapUserKey(stretched, protectedUserKey);
   const masterPasswordHash = await deriveMasterPasswordHash(masterKey, masterPassword);

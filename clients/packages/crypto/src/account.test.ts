@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { buildRegistration, unlock, encryptItem, decryptItem } from "./account.js";
+import { generateAccountId, normalizeIdentifier } from "./identifier.js";
+import { BIP39_WORDLIST } from "./wordlist.js";
 import type { KdfParams } from "./kdf.js";
 
 // Use pbkdf2 so tests run without the hash-wasm (argon2) native dependency.
@@ -15,7 +17,7 @@ test("register → unlock recovers the user key and auth hash", async () => {
   const session = await unlock(EMAIL, PASSWORD, KDF, bundle.protectedUserKey);
   assert.deepEqual(session.userKey, userKey);
   assert.equal(session.masterPasswordHash, bundle.masterPasswordHash);
-  assert.equal(bundle.email, "alice@example.com"); // normalized
+  assert.equal(bundle.identifier, "alice@example.com"); // normalized
 });
 
 test("vault item round-trips through encrypt/decrypt", async () => {
@@ -43,4 +45,24 @@ test("tampered ciphertext is rejected by the AEAD tag", async () => {
   const cipher = await encryptItem(userKey, "secret");
   const tampered = cipher.slice(0, -2) + (cipher.endsWith("=") ? "A=" : "AA");
   await assert.rejects(decryptItem(userKey, tampered));
+});
+
+test("generateAccountId produces valid, varied BIP39 passphrases", async () => {
+  const wordset = new Set(BIP39_WORDLIST);
+  const a = generateAccountId(12);
+  const words = a.split(" ");
+  assert.equal(words.length, 12);
+  for (const w of words) assert.ok(wordset.has(w), `"${w}" not in wordlist`);
+  assert.notEqual(generateAccountId(12), generateAccountId(12)); // randomized
+});
+
+test("a generated passphrase works as a login identifier", async () => {
+  const id = generateAccountId();
+  const { bundle, userKey } = await buildRegistration(id, PASSWORD, KDF);
+  const cipher = await encryptItem(userKey, "secret");
+  // user re-types it with messy spacing/case; normalization must still match
+  const messy = `  ${id.toUpperCase().replace(/ /g, "   ")} `;
+  assert.equal(normalizeIdentifier(messy), bundle.identifier);
+  const session = await unlock(messy, PASSWORD, KDF, bundle.protectedUserKey);
+  assert.equal(await decryptItem(session.userKey, cipher), "secret");
 });

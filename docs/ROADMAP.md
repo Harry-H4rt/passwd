@@ -11,20 +11,27 @@ runnable and tested. **Security review gates ship before real user data.**
 - [ ] `@passwd/api-client` typed client
 - [ ] CI (build + test Go and TS)
 
-## Phase 1 — Crypto correctness (do this before any UI polish)
+## Phase 1 — Crypto correctness ✅
 
-- [ ] Unit tests + **known-answer test vectors** for KDF, HKDF, wrap/unwrap, EncString
-- [ ] Cross-check vectors between TS (client) and a Go reference impl
-- [ ] Finalize master-password-hash derivation & document it
-- [ ] Decide single User Key vs. per-item keys
+- [x] **Known-answer test vectors** (`docs/test-vectors.json`) for KDF (pbkdf2 +
+      argon2id), HKDF, master-password-hash, AES-GCM, EncString
+- [x] Cross-checked between TS (`src/vectors.test.ts`) and a Go reference impl
+      (`backend/internal/crypto`) — both reproduce the file byte-for-byte
+- [x] Identifier-agnostic crypto + BIP39 `generateAccountId()`
+- [x] master-password-hash derivation documented (still a Phase-1 "frozen pending
+      audit" item)
+- [ ] Decide single User Key vs. per-item keys (still open)
 
-## Phase 2 — Backend MVP (single-tenant)
+## Phase 2 — Backend MVP (single-tenant) ✅
 
-- [ ] SQLite storage implementation behind `storage.Store`
-- [ ] Real `register` / `prelogin` / `login` (Argon2id verifier, JWT + refresh)
-- [ ] Cipher CRUD + `/api/sync`
-- [ ] Rate limiting, account lockout, audit log
-- [ ] Integration tests
+- [x] SQLite storage (`modernc.org/sqlite`, no cgo) behind `storage.Store`
+- [x] Blinded-identifier accounts (HMAC + pepper), **opaque ciphers** (no type)
+- [x] Real `register` / `prelogin` / `login` (Argon2id verifier, std-lib HS256
+      JWT + rotating refresh tokens)
+- [x] Owner-scoped cipher CRUD + `/api/sync`
+- [x] IP rate limiting + per-account login lockout
+- [x] Integration test (register → login → refresh → CRUD → sync, owner isolation)
+- [ ] Audit log (deferred)
 
 ## Phase 3 — Web vault
 

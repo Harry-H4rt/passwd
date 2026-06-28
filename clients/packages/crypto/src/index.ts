@@ -3,4 +3,5 @@ export * from "./kdf.js";
 export * from "./encstring.js";
 export * from "./identifier.js";
 export * from "./account.js";
+export * from "./backup.js";
 export { BIP39_WORDLIST } from "./wordlist.js";

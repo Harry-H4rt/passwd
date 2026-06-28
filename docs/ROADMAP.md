@@ -42,7 +42,8 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] One-time recovery-passphrase display on sign-up
 - [x] Extracted shared `@passwd/api-client` (now used by web + extension)
 - [ ] Auto-lock on idle timeout (only manual lock so far)
-- [ ] Import/export (encrypted + plaintext-with-warning)
+- [x] Import/export: encrypted backup (passphrase) + plaintext JSON/CSV with
+      warning; CSV importer maps common managers (Bitwarden/Chrome/generic)
 
 ## Phase 4 — Browser extension (MV3, WXT) ✅ (MVP)
 

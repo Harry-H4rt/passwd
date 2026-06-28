@@ -129,6 +129,27 @@ export async function removeItem(s: Session, id: string): Promise<void> {
   await api.deleteCipher(s.accessToken, id);
 }
 
+// Bulk-add imported items, encrypting each client-side. Reports progress and
+// counts failures rather than aborting the whole import on one bad item.
+export async function importItems(
+  s: Session,
+  items: ItemFields[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ added: number; failed: number }> {
+  let added = 0;
+  let failed = 0;
+  for (let i = 0; i < items.length; i++) {
+    try {
+      await addItem(s, items[i]!);
+      added++;
+    } catch {
+      failed++;
+    }
+    onProgress?.(i + 1, items.length);
+  }
+  return { added, failed };
+}
+
 export function blankFields(): ItemFields {
   return { name: "", username: "", password: "", url: "", notes: "" };
 }

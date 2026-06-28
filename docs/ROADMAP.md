@@ -8,7 +8,7 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Monorepo layout + docs (ARCHITECTURE, CRYPTO, ROADMAP)
 - [x] Go backend that compiles & runs (`/healthz`, route stubs, in-memory store)
 - [x] `@passwd/crypto` package: key hierarchy implemented in TypeScript
-- [ ] `@passwd/api-client` typed client
+- [x] `@passwd/api-client` typed client (shared by web vault + extension)
 - [ ] CI (build + test Go and TS)
 
 ## Phase 1 — Crypto correctness ✅
@@ -51,8 +51,7 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Chrome build (`wxt build` → `.output/chrome-mv3`)
 - [x] Firefox build verified (`build:firefox` → `.output/firefox-mv2`, Gecko
       add-on id set); load via `about:debugging` or `dev:firefox`
-- [ ] Autofill with **domain matching** (anti-phishing)
-- [x] Autofill with domain matching (popup "Fill"; anti-phishing host match)
+- [x] Autofill with **domain matching** (popup "Fill"; anti-phishing host match)
 - [x] Persist unlocked session across popup opens (chrome.storage.session) +
       idle auto-lock
 - [ ] Save-on-submit detection
@@ -74,7 +73,8 @@ runnable and tested. **Security review gates ship before real user data.**
 
 - [x] Astro marketing/info site (home, features, security, FAQ + download) with a
       Proton-like design system (`site/src/styles/global.css`)
-- [ ] Web-vault redesign to match the new design language
+- [x] Web-vault redesign to match the new design language (orange accent, SVG
+      icons, light/dark theme toggle mirroring the site)
 - [ ] Desktop app (Tauri) wrapping the web vault → real installers for the
       site's Download button
 - [ ] Extension store submissions (Chrome Web Store, AMO)

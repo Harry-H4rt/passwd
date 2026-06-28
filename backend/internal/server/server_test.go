@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/passwd-app/server/internal/auth"
 	"github.com/passwd-app/server/internal/config"
 	"github.com/passwd-app/server/internal/storage"
 )
@@ -123,6 +124,62 @@ func TestCORS(t *testing.T) {
 	resp2.Body.Close()
 	if got := resp2.Header.Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("disallowed origin should get no ACAO, got %q", got)
+	}
+}
+
+func TestTwoFactorFlow(t *testing.T) {
+	ts := newTestServer(t)
+	c := &client{t: t, base: ts.URL}
+
+	register(c, "tfa@example.com", "mph")
+	access, _ := login(c, "tfa@example.com", "mph")
+
+	// Setup returns a secret; enable requires a valid code.
+	code, body := c.do("POST", "/api/2fa/setup", access, map[string]any{})
+	if code != 200 {
+		t.Fatalf("2fa setup: %d", code)
+	}
+	secret := body["secret"].(string)
+	totp, err := auth.CurrentTOTP(secret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code, _ := c.do("POST", "/api/2fa/enable", access, map[string]any{"code": totp}); code != 200 {
+		t.Fatalf("2fa enable: %d", code)
+	}
+
+	// Login without a code is rejected with the twoFactorRequired flag.
+	code, body = c.do("POST", "/api/auth/login", "", map[string]any{
+		"identifier": "tfa@example.com", "masterPasswordHash": "mph",
+	})
+	if code != http.StatusUnauthorized || body["twoFactorRequired"] != true {
+		t.Fatalf("login w/o code: %d %v", code, body)
+	}
+
+	// Wrong code rejected.
+	if code, _ := c.do("POST", "/api/auth/login", "", map[string]any{
+		"identifier": "tfa@example.com", "masterPasswordHash": "mph", "totpCode": "000000",
+	}); code != http.StatusUnauthorized {
+		t.Fatalf("login wrong code: %d", code)
+	}
+
+	// Correct code logs in.
+	totp2, _ := auth.CurrentTOTP(secret)
+	if code, _ := c.do("POST", "/api/auth/login", "", map[string]any{
+		"identifier": "tfa@example.com", "masterPasswordHash": "mph", "totpCode": totp2,
+	}); code != 200 {
+		t.Fatalf("login with code: %d", code)
+	}
+
+	// Disable with a valid code, then login works without a code again.
+	totp3, _ := auth.CurrentTOTP(secret)
+	if code, _ := c.do("POST", "/api/2fa/disable", access, map[string]any{"code": totp3}); code != 200 {
+		t.Fatalf("2fa disable: %d", code)
+	}
+	if code, _ := c.do("POST", "/api/auth/login", "", map[string]any{
+		"identifier": "tfa@example.com", "masterPasswordHash": "mph",
+	}); code != 200 {
+		t.Fatalf("login after disable: %d", code)
 	}
 }
 

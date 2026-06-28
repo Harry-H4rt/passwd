@@ -94,6 +94,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 type loginRequest struct {
 	Identifier         string `json:"identifier"`
 	MasterPasswordHash string `json:"masterPasswordHash"`
+	TOTPCode           string `json:"totpCode"`
 }
 
 type loginResponse struct {
@@ -120,6 +121,21 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		var ok bool
 		ok, err = auth.VerifyVerifier(u.MasterPasswordVerifier, req.MasterPasswordHash)
 		if err == nil && ok {
+			// Password correct — enforce the second factor if enrolled.
+			if u.TOTPEnabled {
+				if req.TOTPCode == "" {
+					writeJSON(w, http.StatusUnauthorized, map[string]any{
+						"error":             "two-factor authentication required",
+						"twoFactorRequired": true,
+					})
+					return
+				}
+				if !auth.VerifyTOTP(u.TOTPSecret, req.TOTPCode) {
+					s.lockout.recordFailure(idHash)
+					writeError(w, http.StatusUnauthorized, "invalid credentials")
+					return
+				}
+			}
 			tokens, terr := s.issueTokens(r, u.ID)
 			if terr != nil {
 				s.logger.Error("issue tokens", "err", terr)

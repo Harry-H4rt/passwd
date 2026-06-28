@@ -38,8 +38,13 @@ type User struct {
 	MasterPasswordVerifier string
 	// ProtectedUserKey is the User Key wrapped by the stretched master key (EncString).
 	ProtectedUserKey string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// TOTPSecret is a server-held second-factor secret (base32). 2FA requires the
+	// server to verify codes, so unlike vault data this is not zero-knowledge — it
+	// is an auth factor, never vault content. Empty until enrolled.
+	TOTPSecret  string
+	TOTPEnabled bool
+	CreatedAt   time.Time
+	UpdatedAt   time.Time
 }
 
 // Cipher is a fully opaque encrypted vault item. The server stores no item type —
@@ -68,6 +73,7 @@ type Store interface {
 	CreateUser(ctx context.Context, u User) error
 	GetUserByIdentifierHash(ctx context.Context, identifierHash string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
+	SetUserTOTP(ctx context.Context, userID, secret string, enabled bool) error
 
 	CreateCipher(ctx context.Context, c Cipher) error
 	UpdateCipher(ctx context.Context, c Cipher) error

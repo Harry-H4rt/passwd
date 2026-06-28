@@ -76,4 +76,9 @@ cd backend  && go test ./...                 # Go: crypto vectors + API integrat
 cd clients  && npm -w @passwd/crypto run test # TS: crypto + shared vectors
 ```
 
-See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the build plan and current status.
+Two-factor (TOTP) can be enabled from the vault's **2FA** button; logins then
+prompt for a code.
+
+See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the build plan and status, and
+[`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for production hardening and publishing
+the extension to **AMO (Firefox)** and the **Chrome Web Store**.

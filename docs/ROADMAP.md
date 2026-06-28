@@ -52,17 +52,23 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Firefox build verified (`build:firefox` → `.output/firefox-mv2`, Gecko
       add-on id set); load via `about:debugging` or `dev:firefox`
 - [ ] Autofill with **domain matching** (anti-phishing)
+- [x] Autofill with domain matching (popup "Fill"; anti-phishing host match)
+- [x] Persist unlocked session across popup opens (chrome.storage.session) +
+      idle auto-lock
 - [ ] Save-on-submit detection
-- [ ] Persist unlocked session across popup opens (chrome.storage.session) +
-      add/edit items from the popup
+- [ ] Add/edit items from the popup
 - [ ] Custom icons
 
-## Phase 5 — Hardening & 2FA
+## Phase 5 — Hardening & 2FA (in progress)
 
-- [ ] TOTP, then WebAuthn/passkeys
-- [ ] CSP, security headers, secrets management
+- [x] TOTP 2FA (enroll/verify), with web vault enable/disable + login prompt
+- [ ] WebAuthn/passkeys
+- [x] CSP, security headers (HSTS in prod), CORS allowlist; non-default secrets
+      enforced in production
+- [x] Idle auto-lock (web vault + extension)
 - [ ] Emergency access / recovery codes (user-controlled, never server reset)
-- [ ] **Independent crypto + app security audit**
+- [ ] Secrets management for deploy (documented in docs/DEPLOYMENT.md)
+- [ ] **Independent crypto + app security audit** (gate before real users)
 
 ## Phase 6 — Site & distribution
 

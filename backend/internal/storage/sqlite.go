@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
 	kdf_parallelism    INTEGER NOT NULL,
 	verifier           TEXT NOT NULL,
 	protected_user_key TEXT NOT NULL,
+	totp_secret        TEXT NOT NULL DEFAULT '',
+	totp_enabled       INTEGER NOT NULL DEFAULT 0,
 	created_at         INTEGER NOT NULL,
 	updated_at         INTEGER NOT NULL
 );
@@ -60,6 +62,19 @@ func OpenSQLite(path string) (*SQLite, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
+	// Idempotent column additions for databases created before these columns
+	// existed. SQLite has no ADD COLUMN IF NOT EXISTS, so ignore "duplicate
+	// column" errors.
+	for _, stmt := range []string{
+		`ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0`,
+	} {
+		if _, err := db.ExecContext(context.Background(), stmt); err != nil &&
+			!strings.Contains(err.Error(), "duplicate column name") {
+			_ = db.Close()
+			return nil, fmt.Errorf("migrate: %w", err)
+		}
+	}
 	return &SQLite{db: db}, nil
 }
 
@@ -77,10 +92,11 @@ func fromUnix(n int64) time.Time { return time.Unix(n, 0).UTC() }
 func (s *SQLite) CreateUser(ctx context.Context, u User) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO users (id, identifier_hash, kdf_type, kdf_iterations, kdf_memory_mib,
-			kdf_parallelism, verifier, protected_user_key, created_at, updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled, created_at, updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
 		u.ID, u.IdentifierHash, u.KDF.Type, u.KDF.Iterations, u.KDF.MemoryMiB,
-		u.KDF.Parallelism, u.MasterPasswordVerifier, u.ProtectedUserKey, unix(u.CreatedAt), unix(u.UpdatedAt))
+		u.KDF.Parallelism, u.MasterPasswordVerifier, u.ProtectedUserKey,
+		u.TOTPSecret, boolToInt(u.TOTPEnabled), unix(u.CreatedAt), unix(u.UpdatedAt))
 	if isUnique(err) {
 		return ErrConflict
 	}
@@ -90,21 +106,24 @@ func (s *SQLite) CreateUser(ctx context.Context, u User) error {
 func (s *SQLite) scanUser(row *sql.Row) (User, error) {
 	var u User
 	var created, updated int64
+	var totpEnabled int
 	err := row.Scan(&u.ID, &u.IdentifierHash, &u.KDF.Type, &u.KDF.Iterations,
 		&u.KDF.MemoryMiB, &u.KDF.Parallelism, &u.MasterPasswordVerifier,
-		&u.ProtectedUserKey, &created, &updated)
+		&u.ProtectedUserKey, &u.TOTPSecret, &totpEnabled, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
 	if err != nil {
 		return User{}, err
 	}
+	u.TOTPEnabled = totpEnabled != 0
 	u.CreatedAt, u.UpdatedAt = fromUnix(created), fromUnix(updated)
 	return u, nil
 }
 
 const userCols = `id, identifier_hash, kdf_type, kdf_iterations, kdf_memory_mib,
-	kdf_parallelism, verifier, protected_user_key, created_at, updated_at`
+	kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled,
+	created_at, updated_at`
 
 func (s *SQLite) GetUserByIdentifierHash(ctx context.Context, identifierHash string) (User, error) {
 	return s.scanUser(s.db.QueryRowContext(ctx,
@@ -114,6 +133,23 @@ func (s *SQLite) GetUserByIdentifierHash(ctx context.Context, identifierHash str
 func (s *SQLite) GetUserByID(ctx context.Context, id string) (User, error) {
 	return s.scanUser(s.db.QueryRowContext(ctx,
 		`SELECT `+userCols+` FROM users WHERE id = ?`, id))
+}
+
+func (s *SQLite) SetUserTOTP(ctx context.Context, userID, secret string, enabled bool) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE users SET totp_secret = ?, totp_enabled = ? WHERE id = ?`,
+		secret, boolToInt(enabled), userID)
+	if err != nil {
+		return err
+	}
+	return notFoundIfNoRows(res)
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func (s *SQLite) CreateCipher(ctx context.Context, c Cipher) error {

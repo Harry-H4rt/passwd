@@ -161,7 +161,9 @@ recovery-code mechanism, never a server-side reset.
       separation string before audit.
 - [ ] Decide per-item keys vs. single User Key (Bitwarden uses per-item).
 - [ ] Account/key rotation flow (re-encrypt-all on password change).
-- [ ] 2FA: TOTP first, then WebAuthn.
+- [x] 2FA: TOTP implemented (server-verified). Note: the TOTP secret is held
+      server-side because the server must verify codes — it is an *auth factor*,
+      not vault data, and never touches vault contents. WebAuthn/passkeys next.
 - [ ] User-controlled recovery (recovery key / emergency access) — never a
       server-side reset.
 - [ ] Independent crypto review **before** storing any real user data.

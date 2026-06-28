@@ -53,6 +53,12 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /api/auth/login", s.rateLimit(http.HandlerFunc(s.handleLogin)))
 	mux.Handle("POST /api/auth/refresh", s.rateLimit(http.HandlerFunc(s.handleRefresh)))
 
+	// Two-factor (TOTP) — requires a valid access token.
+	mux.Handle("GET /api/2fa", s.requireAuth(http.HandlerFunc(s.handleTOTPStatus)))
+	mux.Handle("POST /api/2fa/setup", s.requireAuth(http.HandlerFunc(s.handleTOTPSetup)))
+	mux.Handle("POST /api/2fa/enable", s.requireAuth(http.HandlerFunc(s.handleTOTPEnable)))
+	mux.Handle("POST /api/2fa/disable", s.requireAuth(http.HandlerFunc(s.handleTOTPDisable)))
+
 	// Vault sync — requires a valid access token.
 	mux.Handle("GET /api/sync", s.requireAuth(http.HandlerFunc(s.handleSync)))
 	mux.Handle("POST /api/ciphers", s.requireAuth(http.HandlerFunc(s.handleCreateCipher)))

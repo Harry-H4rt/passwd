@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -16,11 +17,43 @@ import (
 	"github.com/passwd-app/server/internal/storage"
 )
 
+// openStore selects the persistence backend from config. An empty or "memory"
+// PASSWD_DB uses the in-memory store (tests/ephemeral); otherwise SQLite at the
+// given path (directories created as needed).
+func openStore(cfg config.Config, logger *slog.Logger) (storage.Store, error) {
+	if cfg.DBPath == "" || cfg.DBPath == "memory" {
+		logger.Warn("using in-memory store (not durable); set PASSWD_DB for persistence")
+		return storage.NewMemory(), nil
+	}
+	if dir := filepath.Dir(cfg.DBPath); dir != "" && dir != "." {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return nil, err
+		}
+	}
+	logger.Info("using SQLite store", "path", cfg.DBPath)
+	return storage.OpenSQLite(cfg.DBPath)
+}
+
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	cfg := config.Load()
-	store := storage.NewMemory() // Phase 2: swap for SQLite/Postgres impl.
+
+	store, err := openStore(cfg, logger)
+	if err != nil {
+		logger.Error("open store", "err", err)
+		os.Exit(1)
+	}
+	defer store.Close()
+
+	if cfg.IsProduction() {
+		if cfg.JWTSecret == "dev-only-insecure-secret-change-me" ||
+			cfg.IdentifierPepper == "dev-only-insecure-pepper-change-me" {
+			logger.Error("refusing to start in production with default secrets; set PASSWD_JWT_SECRET and PASSWD_IDENTIFIER_PEPPER")
+			os.Exit(1)
+		}
+	}
+
 	srv := server.New(cfg, store, logger)
 
 	httpServer := &http.Server{

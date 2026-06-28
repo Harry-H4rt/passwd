@@ -101,6 +101,33 @@ Every ciphertext is serialized as a self-describing string so we stay crypto-agi
 `type` is an integer enum: `1` = AES-256-GCM, `2` = AES-256-CBC-HMAC-SHA256
 (compat). Parsers must reject unknown types.
 
+## Account identity (blinding) — ultra-privacy
+
+The account's login handle (the **identifier**) is either a generated BIP39
+passphrase (privacy-first default) or an email (opt-in convenience). The crypto
+layer is identifier-agnostic: the normalized identifier is the KDF salt.
+
+The server **never stores the plaintext identifier**. It stores only a blinded
+hash:
+
+```
+identifierHash = HMAC-SHA256(serverPepper, normalize(identifier))
+```
+
+- `serverPepper` is a server-side secret (`PASSWD_IDENTIFIER_PEPPER`). It must be
+  strong and **stable** — rotating it orphans every account.
+- Blinding means a stolen database cannot enumerate users, and (without the
+  pepper) cannot even confirm a guessed identifier. Email accounts are blinded
+  too, so choosing email costs nothing in privacy — but the server then has no
+  way to contact users (no notifications, no email-based reset).
+- `normalize` = trim + lowercase + collapse internal whitespace (shared by TS and
+  Go; see test vectors).
+
+**Stored per user:** `{ identifierHash, kdfParams, argon2id(masterPasswordHash),
+protectedUserKey }`. **Ciphers are fully opaque** — id, owner, EncString blob, and
+timestamps only. No item type, no name, no URL, no password hint. No PII in logs;
+rate-limit/lockout state is ephemeral and in-memory.
+
 ## What the server can and cannot do
 
 | The server CAN | The server CANNOT |
@@ -109,6 +136,8 @@ Every ciphertext is serialized as a self-describing string so we stay crypto-agi
 | Store & return encrypted blobs | Decrypt any vault item |
 | Enforce 2FA, rate limits, account lockout | Recover a forgotten master password |
 | Rotate which ciphertexts it holds | Read item names, URLs, notes, or passwords |
+| (nothing) | Learn the plaintext identifier / who its users are |
+| (nothing) | See even the *type* of a stored item |
 
 **Consequence:** a forgotten master password = unrecoverable vault. The UX must
 make this explicit and offer an (optional, user-controlled) Emergency Access /
@@ -125,9 +154,14 @@ recovery-code mechanism, never a server-side reset.
 
 ## Open decisions / TODO before any audit
 
-- [ ] Finalize the exact "Master Password Hash" derivation (domain separation
-      string) and document the test vectors.
+- [x] Known-answer test vectors for every primitive, cross-checked TS↔Go
+      (`docs/test-vectors.json`).
+- [~] "Master Password Hash" derivation implemented (1 PBKDF2 pass over the master
+      key, salted by the password). **Still to freeze:** add an explicit domain-
+      separation string before audit.
 - [ ] Decide per-item keys vs. single User Key (Bitwarden uses per-item).
 - [ ] Account/key rotation flow (re-encrypt-all on password change).
 - [ ] 2FA: TOTP first, then WebAuthn.
+- [ ] User-controlled recovery (recovery key / emergency access) — never a
+      server-side reset.
 - [ ] Independent crypto review **before** storing any real user data.

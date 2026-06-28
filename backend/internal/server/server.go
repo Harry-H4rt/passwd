@@ -8,41 +8,54 @@ import (
 
 	"github.com/passwd-app/server/internal/config"
 	"github.com/passwd-app/server/internal/storage"
+	"github.com/passwd-app/server/internal/vault"
 )
 
 type Server struct {
-	cfg    config.Config
-	store  storage.Store
-	logger *slog.Logger
+	cfg     config.Config
+	store   storage.Store
+	vault   *vault.Service
+	logger  *slog.Logger
+	limiter *rateLimiter
+	lockout *lockoutTracker
 }
 
 func New(cfg config.Config, store storage.Store, logger *slog.Logger) *Server {
-	return &Server{cfg: cfg, store: store, logger: logger}
+	rate := cfg.AuthRateLimitPerMin
+	if rate <= 0 {
+		rate = 60
+	}
+	return &Server{
+		cfg:     cfg,
+		store:   store,
+		vault:   vault.New(store),
+		logger:  logger,
+		limiter: newRateLimiter(rate, time.Minute),
+		lockout: newLockoutTracker(5, 15*time.Minute), // 5 fails -> 15 min lock
+	}
 }
 
-// Routes builds the handler tree using Go 1.22's method+path mux (no router dep).
+// Routes builds the handler tree using Go 1.22's method+path mux.
 func (s *Server) Routes() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /healthz", s.handleHealth)
 
-	// Account / auth
-	mux.HandleFunc("POST /api/accounts/prelogin", s.handlePrelogin)
-	mux.HandleFunc("POST /api/accounts/register", s.handleRegister)
-	mux.HandleFunc("POST /api/auth/login", s.handleLogin)
-	mux.HandleFunc("POST /api/auth/refresh", s.notImplemented)
+	// Account / auth — rate limited per IP.
+	mux.Handle("POST /api/accounts/prelogin", s.rateLimit(http.HandlerFunc(s.handlePrelogin)))
+	mux.Handle("POST /api/accounts/register", s.rateLimit(http.HandlerFunc(s.handleRegister)))
+	mux.Handle("POST /api/auth/login", s.rateLimit(http.HandlerFunc(s.handleLogin)))
+	mux.Handle("POST /api/auth/refresh", s.rateLimit(http.HandlerFunc(s.handleRefresh)))
 
-	// Vault sync (Phase 2: protect with auth middleware)
-	mux.HandleFunc("GET /api/sync", s.notImplemented)
-	mux.HandleFunc("POST /api/ciphers", s.notImplemented)
-	mux.HandleFunc("PUT /api/ciphers/{id}", s.notImplemented)
-	mux.HandleFunc("DELETE /api/ciphers/{id}", s.notImplemented)
+	// Vault sync — requires a valid access token.
+	mux.Handle("GET /api/sync", s.requireAuth(http.HandlerFunc(s.handleSync)))
+	mux.Handle("POST /api/ciphers", s.requireAuth(http.HandlerFunc(s.handleCreateCipher)))
+	mux.Handle("PUT /api/ciphers/{id}", s.requireAuth(http.HandlerFunc(s.handleUpdateCipher)))
+	mux.Handle("DELETE /api/ciphers/{id}", s.requireAuth(http.HandlerFunc(s.handleDeleteCipher)))
 
 	return s.withMiddleware(mux)
 }
 
-// withMiddleware wraps the mux with recovery, request logging, and security
-// headers, applied outermost-first.
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
 	return s.recoverer(s.requestLogger(s.securityHeaders(next)))
 }
@@ -64,6 +77,7 @@ func (s *Server) requestLogger(next http.Handler) http.Handler {
 		start := time.Now()
 		sw := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(sw, r)
+		// Deliberately logs no identifier/PII — only method, path, status, timing.
 		s.logger.Info("request",
 			"method", r.Method, "path", r.URL.Path,
 			"status", sw.status, "dur", time.Since(start).String())
@@ -75,6 +89,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
 }

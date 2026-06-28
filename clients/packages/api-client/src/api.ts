@@ -1,4 +1,4 @@
-// Thin typed client for the passwd backend. Transport only — it sends/receives
+// Thin typed client for the passwd backend. Transport only. It sends/receives
 // the ciphertext produced by @passwd/crypto and never handles plaintext secrets.
 //
 // The base URL is configurable: the web vault leaves it "" (same-origin, via the

@@ -2,7 +2,7 @@ import { BIP39_WORDLIST } from "./wordlist.js";
 
 // An account identifier is whatever the user logs in with: either a generated
 // passphrase (privacy-first default) or an email (opt-in). The crypto layer
-// treats them identically — the normalized identifier is the KDF salt, and the
+// treats them identically; the normalized identifier is the KDF salt, and the
 // server only ever sees a blinded HMAC of it. See docs/CRYPTO.md.
 
 // Canonical form used everywhere the identifier is hashed or salted. Trims, lower-

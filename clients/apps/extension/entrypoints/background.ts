@@ -2,8 +2,8 @@ import { configureApi, loginAccount, loadVault, type Session } from "@passwd/api
 import type { BgRequest, StateResponse, ItemsResponse, UnlockResponse } from "../utils/protocol";
 
 // The background worker owns the unlocked session. It is kept in
-// chrome.storage.session — memory-only (never written to disk, cleared when the
-// browser closes) — so it survives the service worker sleeping/waking but is
+// chrome.storage.session (memory-only: never written to disk, cleared when the
+// browser closes), so it survives the service worker sleeping/waking but is
 // dropped on browser exit. An idle timer (chrome.alarms) locks it sooner.
 
 const API_BASE = "http://localhost:8080";

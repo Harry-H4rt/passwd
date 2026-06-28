@@ -7,7 +7,7 @@ const groups = [
     title: "Privacy by design",
     items: [
       ["Zero-knowledge encryption", "Vault items are encrypted with AES-256-GCM on your device. The server stores only opaque ciphertext."],
-      ["Passphrase accounts", "Sign up with a generated 12-word passphrase — no email, no phone number, no personal data."],
+      ["Passphrase accounts", "Sign up with a generated 12-word passphrase. No email, no phone number, no personal data."],
       ["Blinded identity", "Even your login handle is stored only as a salted hash, so the server can't enumerate or identify its users."],
       ["No tracking", "No analytics, no third-party scripts, no telemetry. Nothing to leak."],
     ],
@@ -18,14 +18,14 @@ const groups = [
       ["Argon2id key derivation", "Your master password is stretched with a memory-hard KDF, making brute-force attacks impractical."],
       ["Two-factor (TOTP)", "Turn on app-based 2FA in a click; logins then require a one-time code."],
       ["Auto-lock", "The vault locks itself after inactivity, clearing your keys from memory."],
-      ["Open source & auditable", "The full client and server are public — verify the cryptography yourself."],
+      ["Open source and auditable", "The full client and server are public, so you can verify the cryptography yourself."],
     ],
   },
   {
     title: "Everyday use",
     items: [
       ["Browser extension", "A popup vault for Chrome and Firefox that stays unlocked between uses."],
-      ["Autofill with domain matching", "Fill credentials on the right site only — strict host matching helps resist phishing."],
+      ["Autofill with domain matching", "Fill credentials on the right site only, with strict host matching that helps resist phishing."],
       ["Password generator", "Create strong, unique passwords for every account."],
       ["Self-hostable", "Run the whole thing yourself from a single static Go binary with SQLite."],
     ],
@@ -33,7 +33,7 @@ const groups = [
 ];
 ---
 
-<Base title="Features — passwd" active="features">
+<Base title="Features | passwd" active="features">
   <section class="hero" style="padding-bottom:48px;">
     <div class="container">
       <span class="eyebrow">Features</span>

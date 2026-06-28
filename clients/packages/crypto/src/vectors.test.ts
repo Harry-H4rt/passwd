@@ -20,7 +20,7 @@ const hex = (b: Uint8Array) => Buffer.from(b).toString("hex");
 const unhex = (s: string) => new Uint8Array(Buffer.from(s, "hex"));
 
 // This suite guarantees the TS package still matches the committed vectors that
-// the Go reference impl is also held to — so client and server can never silently
+// the Go reference impl is also held to, so client and server can never silently
 // disagree on the crypto.
 
 test("KDF: pbkdf2 master key matches vector", async () => {

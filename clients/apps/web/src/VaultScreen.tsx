@@ -17,6 +17,7 @@ import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
 import { AsyncButton } from "./components/AsyncButton";
 import { ThemeToggle } from "./components/ThemeToggle";
+import { ImportExport } from "./ImportExport";
 
 export function VaultScreen(props: {
   session: Session;
@@ -31,6 +32,7 @@ export function VaultScreen(props: {
   const [editing, setEditing] = useState<VaultItem | null>(null);
   const [query, setQuery] = useState("");
   const [show2fa, setShow2fa] = useState(false);
+  const [showData, setShowData] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   function flash(msg: string) {
@@ -103,6 +105,9 @@ export function VaultScreen(props: {
         <span className="account" title={session.identifier}>
           {session.identifier}
         </span>
+        <button className="ghost" onClick={() => setShowData(true)}>
+          Import / export
+        </button>
         <button className="ghost" onClick={() => setShow2fa(true)}>
           2FA
         </button>
@@ -169,6 +174,17 @@ export function VaultScreen(props: {
 
       {editing && <ItemEditor item={editing} onCancel={() => setEditing(null)} onSave={handleSave} />}
       {show2fa && <TwoFactor session={session} onClose={() => setShow2fa(false)} />}
+      {showData && (
+        <ImportExport
+          session={session}
+          items={items}
+          onClose={() => setShowData(false)}
+          onImported={() => {
+            void reload();
+            flash("Imported");
+          }}
+        />
+      )}
       {toast && <div className="toast">{toast}</div>}
     </div>
   );

@@ -18,8 +18,8 @@ import { normalizeIdentifier } from "./identifier.js";
 const USER_KEY_BYTES = 64; // 32 for AES-GCM + 32 reserved (per-item / CBC-HMAC compat)
 
 export interface StretchedKey {
-  encKey: Uint8Array; // 32 bytes — AES-GCM
-  macKey: Uint8Array; // 32 bytes — reserved for CBC-HMAC compatibility
+  encKey: Uint8Array; // 32 bytes, AES-GCM
+  macKey: Uint8Array; // 32 bytes, reserved for CBC-HMAC compatibility
 }
 
 // Master Key = KDF(masterPassword, salt = normalize(identifier)). The identifier
@@ -33,7 +33,7 @@ export async function deriveMasterKey(
   return deriveKey(masterPassword, normalizeIdentifier(identifier), params);
 }
 
-// Master Password Hash — the authentication credential sent to the server. One
+// Master Password Hash, the authentication credential sent to the server. One
 // PBKDF2 pass over the master key, salted by the password (mirrors Bitwarden).
 // The server stores Argon2id(this); it cannot recover the master key from it.
 // TODO(Phase 1): freeze this definition and publish known-answer test vectors.

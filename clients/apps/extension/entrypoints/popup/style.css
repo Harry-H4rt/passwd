@@ -5,7 +5,8 @@
   --border: #2a323d;
   --text: #e6edf3;
   --muted: #8b97a7;
-  --accent: #4f8cff;
+  --accent: #ff7a2e;
+  --accent-600: #ff8c47;
   --danger: #ff6b6b;
 }
 
@@ -74,6 +75,42 @@ button:disabled {
 }
 .unlock h1 {
   text-align: center;
+}
+.title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.title svg {
+  color: var(--accent);
+}
+.brand svg {
+  color: var(--accent);
+  vertical-align: -3px;
+}
+.pwrow {
+  position: relative;
+}
+.pwrow input {
+  padding-right: 58px;
+}
+.pwrow .reveal {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.pwrow .reveal:hover {
+  color: var(--accent);
 }
 .link {
   display: block;

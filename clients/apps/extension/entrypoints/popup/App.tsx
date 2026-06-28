@@ -21,13 +21,23 @@ export function App() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="vault"><p className="muted">…</p></div>;
+  if (loading) return <div className="vault"><p className="muted">Loading...</p></div>;
   return locked ? <Unlock onUnlocked={() => setLocked(false)} /> : <Vault onLock={() => setLocked(true)} />;
+}
+
+function LockMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="10" width="16" height="11" rx="2" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
 }
 
 function Unlock(props: { onUnlocked: () => void }) {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,9 +58,7 @@ function Unlock(props: { onUnlocked: () => void }) {
 
   return (
     <form className="unlock" onSubmit={submit}>
-      <h1>
-        passwd <span>🔒</span>
-      </h1>
+      <h1 className="title"><LockMark /> passwd</h1>
       <input
         placeholder="passphrase or email"
         value={identifier}
@@ -59,16 +67,21 @@ function Unlock(props: { onUnlocked: () => void }) {
         spellCheck={false}
         autoComplete="off"
       />
-      <input
-        type="password"
-        placeholder="master password"
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        autoComplete="off"
-      />
+      <div className="pwrow">
+        <input
+          type={showPw ? "text" : "password"}
+          placeholder="master password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="off"
+        />
+        <button type="button" className="reveal" onClick={() => setShowPw((s) => !s)}>
+          {showPw ? "Hide" : "Show"}
+        </button>
+      </div>
       {error && <div className="error">{error}</div>}
       <button className="primary" disabled={busy} type="submit">
-        {busy ? "Unlocking…" : "Unlock"}
+        {busy ? "Unlocking..." : "Unlock"}
       </button>
       <a className="link" href={WEB_VAULT_URL} target="_blank" rel="noreferrer">
         No account? Create one in the web vault →
@@ -155,16 +168,16 @@ function Vault(props: { onLock: () => void }) {
   return (
     <div className="vault">
       <header>
-        <span className="brand">passwd 🔒</span>
+        <span className="brand"><LockMark /> passwd</span>
         <button className="ghost" onClick={lock}>
           Lock
         </button>
       </header>
-      <input className="search" placeholder="Search…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      <input className="search" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
 
       {error && <div className="error">{error}</div>}
       {loading ? (
-        <p className="muted">Decrypting…</p>
+        <p className="muted">Decrypting...</p>
       ) : filtered.length === 0 ? (
         <p className="muted">
           No items. <a href={WEB_VAULT_URL} target="_blank" rel="noreferrer">Open the web vault</a> to add some.

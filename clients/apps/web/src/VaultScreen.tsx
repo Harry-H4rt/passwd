@@ -13,6 +13,9 @@ import {
   enableTwoFactor,
   disableTwoFactor,
 } from "@passwd/api-client";
+import { Icon } from "./components/Icon";
+import { PasswordField } from "./components/PasswordField";
+import { AsyncButton } from "./components/AsyncButton";
 
 export function VaultScreen(props: {
   session: Session;
@@ -27,6 +30,12 @@ export function VaultScreen(props: {
   const [editing, setEditing] = useState<VaultItem | null>(null);
   const [query, setQuery] = useState("");
   const [show2fa, setShow2fa] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+
+  function flash(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(null), 1300);
+  }
 
   async function reload() {
     setLoading(true);
@@ -45,14 +54,18 @@ export function VaultScreen(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleSave(item: VaultItem) {
+  // Returns true on success so the editor's button can show its "Saved" state
+  // before the modal closes.
+  async function handleSave(item: VaultItem): Promise<boolean> {
     try {
       if (item.id) await saveItem(session, item);
       else await addItem(session, stripId(item));
-      setEditing(null);
       await reload();
+      flash("Saved");
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Save failed.");
+      return false;
     }
   }
 
@@ -61,9 +74,15 @@ export function VaultScreen(props: {
     try {
       await removeItem(session, item.id);
       await reload();
+      flash("Deleted");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Delete failed.");
     }
+  }
+
+  async function copy(label: string, value: string) {
+    await navigator.clipboard.writeText(value);
+    flash(`Copied ${label}`);
   }
 
   const filtered = items.filter(
@@ -77,12 +96,12 @@ export function VaultScreen(props: {
   return (
     <div className="app">
       <header className="topbar">
-        <div className="brand">
-          passwd <span className="lock">🔒</span>
-        </div>
-        <div className="account" title={session.identifier}>
+        <span className="brand">
+          <Icon name="lock" size={18} /> passwd
+        </span>
+        <span className="account" title={session.identifier}>
           {session.identifier}
-        </div>
+        </span>
         <button className="ghost" onClick={() => setShow2fa(true)}>
           2FA
         </button>
@@ -93,31 +112,33 @@ export function VaultScreen(props: {
 
       {props.recovery && (
         <div className="recovery">
-          <strong>Save your recovery passphrase.</strong> This is the only way back into your account —
-          there is no reset. Store it somewhere safe (not in this vault).
+          <strong>Save your recovery passphrase.</strong> This is the only way back into your
+          account, and there is no reset. Store it somewhere safe (not in this vault).
           <pre>{props.recovery}</pre>
-          <button className="ghost" onClick={() => navigator.clipboard?.writeText(props.recovery!)}>
-            Copy
-          </button>
-          <button className="ghost" onClick={props.onDismissRecovery}>
-            I've saved it
-          </button>
+          <div className="row">
+            <button className="ghost" onClick={() => copy("recovery passphrase", props.recovery!)}>
+              Copy
+            </button>
+            <button className="ghost" onClick={props.onDismissRecovery}>
+              I've saved it
+            </button>
+          </div>
         </div>
       )}
 
       <div className="toolbar">
-        <input className="search" placeholder="Search…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <input className="search" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />
         <button className="primary" onClick={() => setEditing({ id: "", ...blankFields() })}>
-          + Add item
+          Add item
         </button>
       </div>
 
       {error && <div className="error banner">{error}</div>}
 
       {loading ? (
-        <p className="muted center-text">Decrypting vault…</p>
+        <p className="muted center-text">Decrypting vault...</p>
       ) : filtered.length === 0 ? (
-        <p className="muted center-text">No items yet. Click “Add item” to store your first password.</p>
+        <p className="muted center-text">No items yet. Click "Add item" to store your first password.</p>
       ) : (
         <ul className="items">
           {filtered.map((item) => (
@@ -128,8 +149,8 @@ export function VaultScreen(props: {
               </div>
               <div className="item-actions">
                 {item.password && (
-                  <button className="ghost" onClick={() => navigator.clipboard?.writeText(item.password)}>
-                    Copy password
+                  <button className="ghost" onClick={() => copy("password", item.password)}>
+                    Copy
                   </button>
                 )}
                 <button className="ghost" onClick={() => setEditing(item)}>
@@ -146,6 +167,7 @@ export function VaultScreen(props: {
 
       {editing && <ItemEditor item={editing} onCancel={() => setEditing(null)} onSave={handleSave} />}
       {show2fa && <TwoFactor session={session} onClose={() => setShow2fa(false)} />}
+      {toast && <div className="toast">{toast}</div>}
     </div>
   );
 }
@@ -159,117 +181,11 @@ function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : "Something went wrong.";
 }
 
-function TwoFactor(props: { session: Session; onClose: () => void }) {
-  const [loading, setLoading] = useState(true);
-  const [enabled, setEnabled] = useState(false);
-  const [setup, setSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
-  const [code, setCode] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    getTwoFactorStatus(props.session)
-      .then((s) => setEnabled(s.enabled))
-      .catch((e) => setError(errMsg(e)))
-      .finally(() => setLoading(false));
-  }, [props.session]);
-
-  async function run(fn: () => Promise<void>) {
-    setError(null);
-    setBusy(true);
-    try {
-      await fn();
-    } catch (e) {
-      setError(errMsg(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="modal-backdrop" onClick={props.onClose}>
-      <div className="card modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Two-factor authentication</h2>
-        {loading ? (
-          <p className="muted">Loading…</p>
-        ) : enabled ? (
-          <>
-            <p className="muted">
-              2FA is <strong>enabled</strong>. Enter a current code to turn it off.
-            </p>
-            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6-digit code" inputMode="numeric" autoFocus />
-            {error && <div className="error">{error}</div>}
-            <div className="row end">
-              <button className="ghost" onClick={props.onClose}>
-                Close
-              </button>
-              <button
-                className="ghost danger"
-                disabled={busy}
-                onClick={() => run(async () => {
-                  await disableTwoFactor(props.session, code);
-                  setEnabled(false);
-                  setCode("");
-                })}
-              >
-                Disable 2FA
-              </button>
-            </div>
-          </>
-        ) : setup ? (
-          <>
-            <p className="muted">
-              Add this secret to your authenticator app (or paste the otpauth URI), then enter a code to confirm.
-            </p>
-            <label>Secret</label>
-            <input readOnly value={setup.secret} onFocus={(e) => e.currentTarget.select()} />
-            <label>otpauth URI</label>
-            <input readOnly value={setup.otpauthUri} onFocus={(e) => e.currentTarget.select()} />
-            <label>Code from your app</label>
-            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6-digit code" inputMode="numeric" autoFocus />
-            {error && <div className="error">{error}</div>}
-            <div className="row end">
-              <button className="ghost" onClick={props.onClose}>
-                Cancel
-              </button>
-              <button
-                className="primary"
-                disabled={busy}
-                onClick={() => run(async () => {
-                  await enableTwoFactor(props.session, code);
-                  setEnabled(true);
-                  setSetup(null);
-                  setCode("");
-                })}
-              >
-                Enable
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <p className="muted">Protect your account with a time-based one-time code (TOTP).</p>
-            {error && <div className="error">{error}</div>}
-            <div className="row end">
-              <button className="ghost" onClick={props.onClose}>
-                Close
-              </button>
-              <button
-                className="primary"
-                disabled={busy}
-                onClick={() => run(async () => setSetup(await setupTwoFactor(props.session)))}
-              >
-                Set up 2FA
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function ItemEditor(props: { item: VaultItem; onCancel: () => void; onSave: (i: VaultItem) => void }) {
+function ItemEditor(props: {
+  item: VaultItem;
+  onCancel: () => void;
+  onSave: (i: VaultItem) => Promise<boolean>;
+}) {
   const [item, setItem] = useState<VaultItem>(props.item);
   const set = (k: keyof VaultItem, v: string) => setItem((prev) => ({ ...prev, [k]: v }));
 
@@ -285,7 +201,9 @@ function ItemEditor(props: { item: VaultItem; onCancel: () => void; onSave: (i: 
         <input value={item.username} onChange={(e) => set("username", e.target.value)} placeholder="you@example.com" />
         <label>Password</label>
         <div className="row">
-          <input value={item.password} onChange={(e) => set("password", e.target.value)} />
+          <div style={{ flex: 1 }}>
+            <PasswordField value={item.password} onChange={(v) => set("password", v)} />
+          </div>
           <button type="button" className="ghost" onClick={() => set("password", generatePassword())}>
             Generate
           </button>
@@ -296,10 +214,140 @@ function ItemEditor(props: { item: VaultItem; onCancel: () => void; onSave: (i: 
           <button className="ghost" onClick={props.onCancel}>
             Cancel
           </button>
-          <button className="primary" onClick={() => props.onSave(item)}>
+          <AsyncButton
+            variant="primary"
+            loadingLabel="Saving"
+            successLabel="Saved"
+            onClick={() => props.onSave(item)}
+            onSuccess={props.onCancel}
+          >
             Save
-          </button>
+          </AsyncButton>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function TwoFactor(props: { session: Session; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [enabled, setEnabled] = useState(false);
+  const [setup, setSetup] = useState<{ secret: string; otpauthUri: string } | null>(null);
+  const [code, setCode] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getTwoFactorStatus(props.session)
+      .then((s) => setEnabled(s.enabled))
+      .catch((e) => setError(errMsg(e)))
+      .finally(() => setLoading(false));
+  }, [props.session]);
+
+  return (
+    <div className="modal-backdrop" onClick={props.onClose}>
+      <div className="card modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Two-factor authentication</h2>
+        {loading ? (
+          <p className="muted">Loading...</p>
+        ) : enabled ? (
+          <>
+            <p className="muted">
+              2FA is <strong>enabled</strong>. Enter a current code to turn it off.
+            </p>
+            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6-digit code" inputMode="numeric" autoFocus />
+            {error && <div className="error">{error}</div>}
+            <div className="row end">
+              <button className="ghost" onClick={props.onClose}>
+                Close
+              </button>
+              <AsyncButton
+                variant="ghost"
+                danger
+                loadingLabel="Disabling"
+                successLabel="Disabled"
+                onClick={async () => {
+                  setError(null);
+                  try {
+                    await disableTwoFactor(props.session, code);
+                    setEnabled(false);
+                    setCode("");
+                    return true;
+                  } catch (e) {
+                    setError(errMsg(e));
+                    return false;
+                  }
+                }}
+              >
+                Disable 2FA
+              </AsyncButton>
+            </div>
+          </>
+        ) : setup ? (
+          <>
+            <p className="muted">
+              Add this secret to your authenticator app (or paste the otpauth URI), then enter a
+              code to confirm.
+            </p>
+            <label>Secret</label>
+            <input readOnly value={setup.secret} onFocus={(e) => e.currentTarget.select()} />
+            <label>otpauth URI</label>
+            <input readOnly value={setup.otpauthUri} onFocus={(e) => e.currentTarget.select()} />
+            <label>Code from your app</label>
+            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="6-digit code" inputMode="numeric" autoFocus />
+            {error && <div className="error">{error}</div>}
+            <div className="row end">
+              <button className="ghost" onClick={props.onClose}>
+                Cancel
+              </button>
+              <AsyncButton
+                variant="primary"
+                loadingLabel="Enabling"
+                successLabel="Enabled"
+                onClick={async () => {
+                  setError(null);
+                  try {
+                    await enableTwoFactor(props.session, code);
+                    setEnabled(true);
+                    setSetup(null);
+                    setCode("");
+                    return true;
+                  } catch (e) {
+                    setError(errMsg(e));
+                    return false;
+                  }
+                }}
+              >
+                Enable
+              </AsyncButton>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="muted">Protect your account with a time-based one-time code (TOTP).</p>
+            {error && <div className="error">{error}</div>}
+            <div className="row end">
+              <button className="ghost" onClick={props.onClose}>
+                Close
+              </button>
+              <AsyncButton
+                variant="primary"
+                loadingLabel="Starting"
+                onClick={async () => {
+                  setError(null);
+                  try {
+                    setSetup(await setupTwoFactor(props.session));
+                    return true;
+                  } catch (e) {
+                    setError(errMsg(e));
+                    return false;
+                  }
+                }}
+              >
+                Set up 2FA
+              </AsyncButton>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

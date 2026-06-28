@@ -7,13 +7,14 @@ import {
   TwoFactorRequiredError,
 } from "@passwd/api-client";
 import { VaultScreen } from "./VaultScreen";
+import { Icon } from "./components/Icon";
+import { PasswordField } from "./components/PasswordField";
 
 // Lock (drop the in-memory user key) after this much inactivity.
 const IDLE_LOCK_MS = 15 * 60 * 1000;
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
-  // The generated passphrase to show once, right after sign-up.
   const [recovery, setRecovery] = useState<string | null>(null);
 
   // Auto-lock on idle: any activity resets a timer; on expiry we clear the
@@ -62,6 +63,7 @@ function AuthScreen(props: {
   const [identifier, setIdentifier] = useState("");
   const [generated, setGenerated] = useState(false);
   const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
   const [needTotp, setNeedTotp] = useState(false);
   const [totp, setTotp] = useState("");
   const [busy, setBusy] = useState(false);
@@ -72,6 +74,12 @@ function AuthScreen(props: {
     setGenerated(true);
   }
 
+  function switchMode(next: "register" | "login") {
+    setMode(next);
+    setError(null);
+    setNeedTotp(false);
+  }
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -79,9 +87,15 @@ function AuthScreen(props: {
       setError("Enter an account identifier and a master password.");
       return;
     }
-    if (mode === "register" && password.length < 8) {
-      setError("Master password must be at least 8 characters.");
-      return;
+    if (mode === "register") {
+      if (password.length < 8) {
+        setError("Master password must be at least 8 characters.");
+        return;
+      }
+      if (password !== confirm) {
+        setError("The master passwords don't match.");
+        return;
+      }
     }
     setBusy(true);
     try {
@@ -94,7 +108,7 @@ function AuthScreen(props: {
       }
     } catch (err) {
       if (err instanceof TwoFactorRequiredError) {
-        setNeedTotp(true); // prompt for the code and let the user submit again
+        setNeedTotp(true);
         return;
       }
       setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -103,19 +117,28 @@ function AuthScreen(props: {
     }
   }
 
+  const submitLabel = busy
+    ? "Deriving keys"
+    : mode === "register"
+      ? "Create account"
+      : needTotp
+        ? "Verify and unlock"
+        : "Unlock vault";
+
   return (
     <div className="center">
       <form className="card auth" onSubmit={submit}>
-        <h1>
-          passwd <span className="lock">🔒</span>
-        </h1>
+        <div className="brand-row">
+          <Icon name="lock" size={22} />
+          <h1>passwd</h1>
+        </div>
         <p className="muted">Zero-knowledge password manager</p>
 
         <div className="tabs">
-          <button type="button" className={mode === "register" ? "active" : ""} onClick={() => setMode("register")}>
+          <button type="button" className={mode === "register" ? "active" : ""} onClick={() => switchMode("register")}>
             Create account
           </button>
-          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
+          <button type="button" className={mode === "login" ? "active" : ""} onClick={() => switchMode("login")}>
             Sign in
           </button>
         </div>
@@ -133,18 +156,19 @@ function AuthScreen(props: {
         />
         {mode === "register" && (
           <button type="button" className="link" onClick={generate}>
-            ✨ Generate a private passphrase (recommended — no email needed)
+            Generate a private passphrase (recommended, no email needed)
           </button>
         )}
 
         <label>Master password</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="never sent to the server"
-          autoComplete="off"
-        />
+        <PasswordField value={password} onChange={setPassword} placeholder="never sent to the server" />
+
+        {mode === "register" && (
+          <>
+            <label>Confirm master password</label>
+            <PasswordField value={confirm} onChange={setConfirm} placeholder="type it again" />
+          </>
+        )}
 
         {mode === "login" && needTotp && (
           <>
@@ -163,18 +187,13 @@ function AuthScreen(props: {
         {error && <div className="error">{error}</div>}
 
         <button className="primary" disabled={busy} type="submit">
-          {busy
-            ? "Deriving keys…"
-            : mode === "register"
-              ? "Create account"
-              : needTotp
-                ? "Verify & unlock"
-                : "Unlock vault"}
+          {busy && <span className="spinner" />}
+          <span>{submitLabel}</span>
         </button>
 
         <p className="fineprint">
-          Your master password and identifier never leave this device in plaintext. There is{" "}
-          <strong>no password reset</strong> — if you lose them, the vault is unrecoverable.
+          Your master password and identifier never leave this device in plaintext. There is no
+          password reset, so if you lose them the vault is unrecoverable.
         </p>
       </form>
     </div>

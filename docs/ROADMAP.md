@@ -70,11 +70,16 @@ runnable and tested. **Security review gates ship before real user data.**
 - [ ] Secrets management for deploy (documented in docs/DEPLOYMENT.md)
 - [ ] **Independent crypto + app security audit** (gate before real users)
 
-## Phase 6 — Site & distribution
+## Phase 6 — Site & distribution (in progress)
 
-- [ ] Astro marketing/download site
+- [x] Astro marketing/info site (home, features, security, FAQ + download) with a
+      Proton-like design system (`site/src/styles/global.css`)
+- [ ] Web-vault redesign to match the new design language
+- [ ] Desktop app (Tauri) wrapping the web vault → real installers for the
+      site's Download button
 - [ ] Extension store submissions (Chrome Web Store, AMO)
 - [ ] Signed release binaries + self-host docs (Docker)
+- [ ] Wire web/extension/site to a configurable production API + vault URL
 
 ## Phase 7 — SaaS evolution
 

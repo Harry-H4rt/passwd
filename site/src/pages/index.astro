@@ -1,0 +1,86 @@
+---
+import Base from "../layouts/Base.astro";
+const VAULT_URL = "http://localhost:5173";
+
+const features = [
+  { icon: "🛡️", title: "Zero-knowledge", body: "Everything is encrypted on your device. The server only ever stores ciphertext it can't read." },
+  { icon: "🔑", title: "No email required", body: "Create an account with a generated passphrase — no email, no phone, nothing that identifies you." },
+  { icon: "🧩", title: "Browser extension", body: "Unlock once and autofill logins on the sites you visit, with strict domain matching." },
+  { icon: "🔐", title: "Two-factor", body: "Add TOTP two-factor in a click. Your vault stays protected even if a password leaks." },
+  { icon: "📖", title: "Open source", body: "Every line is public and auditable. Trust nothing you can't inspect." },
+  { icon: "⚡", title: "Fast & lightweight", body: "A Go sync backend and a tiny web vault. Self-host it from a single binary." },
+];
+---
+
+<Base active="">
+  <section class="hero">
+    <div class="container">
+      <span class="eyebrow">Privacy is the default</span>
+      <h1>A password manager that can't read your passwords.</h1>
+      <p class="lead">
+        passwd is zero-knowledge and end-to-end encrypted. Your master password and your
+        vault never leave your device in a form anyone else — including us — can read.
+      </p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href={VAULT_URL}>Create free vault</a>
+        <a class="btn btn-ghost" href="/security">How it works →</a>
+      </div>
+      <div class="trust">
+        <span>🔒 End-to-end encrypted</span>
+        <span>🙈 No email needed</span>
+        <span>📖 Open source</span>
+        <span>🧩 Browser extension</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="container">
+      <div class="section-head">
+        <h2>Built so we know nothing about you</h2>
+        <p class="lead">Strong cryptography by default, with none of the data collection.</p>
+      </div>
+      <div class="grid">
+        {features.map((f) => (
+          <div class="card">
+            <span class="icon">{f.icon}</span>
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="block band">
+    <div class="container">
+      <div class="section-head">
+        <h2>How your vault stays private</h2>
+        <p class="lead">
+          Your master password derives an encryption key on your device. Only encrypted blobs
+          are ever sent to the server — there is no copy of your password anywhere to steal.
+        </p>
+      </div>
+      <table class="table" style="max-width:760px;margin-inline:auto;">
+        <thead><tr><th>The server can</th><th>The server can <em>never</em></th></tr></thead>
+        <tbody>
+          <tr><td><span class="can">✓</span> Store &amp; sync encrypted blobs</td><td><span class="cant">✗</span> Read your passwords or notes</td></tr>
+          <tr><td><span class="can">✓</span> Verify your login</td><td><span class="cant">✗</span> Learn your master password</td></tr>
+          <tr><td><span class="can">✓</span> Enforce 2FA &amp; rate limits</td><td><span class="cant">✗</span> Know who its users are</td></tr>
+        </tbody>
+      </table>
+      <p style="text-align:center;"><a href="/security">Read the full security model →</a></p>
+    </div>
+  </section>
+
+  <section class="block cta">
+    <div class="container section-head">
+      <h2>Take back your privacy in two minutes</h2>
+      <p class="lead">Generate a passphrase, set a master password, and you're done. No sign-up forms.</p>
+      <div class="hero-actions">
+        <a class="btn btn-primary" href={VAULT_URL}>Create free vault</a>
+        <a class="btn btn-ghost" href="/features">See all features</a>
+      </div>
+    </div>
+  </section>
+</Base>

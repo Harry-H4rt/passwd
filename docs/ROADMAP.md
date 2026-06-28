@@ -48,8 +48,9 @@ runnable and tested. **Security review gates ship before real user data.**
 
 - [x] WXT MV3 extension reusing `@passwd/crypto` + `@passwd/api-client`
 - [x] Popup: unlock, vault list, search, copy username/password, lock
-- [x] Chrome build (`wxt build` → `.output/chrome-mv3`); Firefox target wired
-      (`build:firefox`)
+- [x] Chrome build (`wxt build` → `.output/chrome-mv3`)
+- [x] Firefox build verified (`build:firefox` → `.output/firefox-mv2`, Gecko
+      add-on id set); load via `about:debugging` or `dev:firefox`
 - [ ] Autofill with **domain matching** (anti-phishing)
 - [ ] Save-on-submit detection
 - [ ] Persist unlocked session across popup opens (chrome.storage.session) +

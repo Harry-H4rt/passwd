@@ -125,6 +125,20 @@ func TestCORS(t *testing.T) {
 	if got := resp2.Header.Get("Access-Control-Allow-Origin"); got != "" {
 		t.Fatalf("disallowed origin should get no ACAO, got %q", got)
 	}
+
+	// Browser-extension origins are reflected (per-install, unguessable; the
+	// extension's background worker needs to reach the API).
+	ext := "moz-extension://24273a83-2f7d-461e-9d4f-ac4d798c23d5"
+	req3, _ := http.NewRequest(http.MethodOptions, ts.URL+"/api/auth/login", nil)
+	req3.Header.Set("Origin", ext)
+	resp3, err := http.DefaultClient.Do(req3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp3.Body.Close()
+	if got := resp3.Header.Get("Access-Control-Allow-Origin"); got != ext {
+		t.Fatalf("extension origin ACAO = %q want %q", got, ext)
+	}
 }
 
 func TestTwoFactorFlow(t *testing.T) {

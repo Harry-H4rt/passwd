@@ -56,6 +56,19 @@ func (m *Memory) GetUserByID(_ context.Context, id string) (User, error) {
 	return u, nil
 }
 
+func (m *Memory) SetUserTOTP(_ context.Context, userID, secret string, enabled bool) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.TOTPSecret = secret
+	u.TOTPEnabled = enabled
+	m.users[userID] = u
+	return nil
+}
+
 func (m *Memory) CreateCipher(_ context.Context, c Cipher) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

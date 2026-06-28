@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { type Session, registerAccount, loginAccount, newAccountId } from "@passwd/api-client";
+import {
+  type Session,
+  registerAccount,
+  loginAccount,
+  newAccountId,
+  TwoFactorRequiredError,
+} from "@passwd/api-client";
 import { VaultScreen } from "./VaultScreen";
 
 // Lock (drop the in-memory user key) after this much inactivity.
@@ -56,6 +62,8 @@ function AuthScreen(props: {
   const [identifier, setIdentifier] = useState("");
   const [generated, setGenerated] = useState(false);
   const [password, setPassword] = useState("");
+  const [needTotp, setNeedTotp] = useState(false);
+  const [totp, setTotp] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,9 +90,13 @@ function AuthScreen(props: {
         props.onRecovery(generated ? identifier.trim().toLowerCase() : null);
         props.onAuthed(s);
       } else {
-        props.onAuthed(await loginAccount(identifier, password));
+        props.onAuthed(await loginAccount(identifier, password, needTotp ? totp : undefined));
       }
     } catch (err) {
+      if (err instanceof TwoFactorRequiredError) {
+        setNeedTotp(true); // prompt for the code and let the user submit again
+        return;
+      }
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setBusy(false);
@@ -134,10 +146,30 @@ function AuthScreen(props: {
           autoComplete="off"
         />
 
+        {mode === "login" && needTotp && (
+          <>
+            <label>Two-factor code</label>
+            <input
+              value={totp}
+              onChange={(e) => setTotp(e.target.value)}
+              placeholder="6-digit code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+            />
+          </>
+        )}
+
         {error && <div className="error">{error}</div>}
 
         <button className="primary" disabled={busy} type="submit">
-          {busy ? "Deriving keys…" : mode === "register" ? "Create account" : "Unlock vault"}
+          {busy
+            ? "Deriving keys…"
+            : mode === "register"
+              ? "Create account"
+              : needTotp
+                ? "Verify & unlock"
+                : "Unlock vault"}
         </button>
 
         <p className="fineprint">

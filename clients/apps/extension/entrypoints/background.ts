@@ -1,5 +1,21 @@
-import { configureApi, loginAccount, loadVault, type Session } from "@passwd/api-client";
-import type { BgRequest, StateResponse, ItemsResponse, UnlockResponse } from "../utils/protocol";
+import {
+  configureApi,
+  loginAccount,
+  loadVault,
+  addItem,
+  saveItem,
+  removeItem,
+  type Session,
+} from "@passwd/api-client";
+import type {
+  BgRequest,
+  StateResponse,
+  ItemsResponse,
+  UnlockResponse,
+  MutationResponse,
+  PendingResponse,
+  PendingSave,
+} from "../utils/protocol";
 
 // The background worker owns the unlocked session. It is kept in
 // chrome.storage.session (memory-only: never written to disk, cleared when the
@@ -9,6 +25,9 @@ import type { BgRequest, StateResponse, ItemsResponse, UnlockResponse } from "..
 const API_BASE = "http://localhost:8080";
 const IDLE_MS = 15 * 60 * 1000;
 const LOCK_ALARM = "passwd-lock";
+// A captured login is only offered to save for a short window, so a stale
+// password never lingers in session memory.
+const PENDING_TTL_MS = 5 * 60 * 1000;
 
 configureApi({ baseUrl: API_BASE });
 
@@ -59,6 +78,23 @@ async function touch(s: StoredSession): Promise<void> {
   await writeStored(s);
 }
 
+// --- pending save (captured login awaiting the user's decision) -------------
+
+interface StoredPending extends PendingSave {
+  capturedAt: number;
+}
+
+async function readPending(): Promise<PendingSave | null> {
+  const got = (await browser.storage.session.get("pending")) as { pending?: StoredPending };
+  const p = got.pending;
+  if (!p) return null;
+  if (Date.now() - p.capturedAt > PENDING_TTL_MS) {
+    await browser.storage.session.remove("pending");
+    return null;
+  }
+  return { url: p.url, username: p.username, password: p.password };
+}
+
 export default defineBackground(() => {
   browser.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === LOCK_ALARM) void clearStored();
@@ -106,6 +142,68 @@ export default defineBackground(() => {
           } catch (e) {
             return { error: e instanceof Error ? e.message : "failed to load vault" };
           }
+        })();
+
+      case "addItem":
+        return (async (): Promise<MutationResponse> => {
+          const s = await readStored();
+          if (!s) return { locked: true };
+          try {
+            await touch(s);
+            return { ok: true, item: await addItem(toSession(s), msg.fields) };
+          } catch (e) {
+            return { error: e instanceof Error ? e.message : "failed to add item" };
+          }
+        })();
+
+      case "updateItem":
+        return (async (): Promise<MutationResponse> => {
+          const s = await readStored();
+          if (!s) return { locked: true };
+          try {
+            await touch(s);
+            await saveItem(toSession(s), msg.item);
+            return { ok: true };
+          } catch (e) {
+            return { error: e instanceof Error ? e.message : "failed to save item" };
+          }
+        })();
+
+      case "deleteItem":
+        return (async (): Promise<MutationResponse> => {
+          const s = await readStored();
+          if (!s) return { locked: true };
+          try {
+            await touch(s);
+            await removeItem(toSession(s), msg.id);
+            return { ok: true };
+          } catch (e) {
+            return { error: e instanceof Error ? e.message : "failed to delete item" };
+          }
+        })();
+
+      case "captureLogin":
+        return (async (): Promise<{ ok: true }> => {
+          // Store the latest captured login (memory-only) for the popup to offer.
+          if (msg.password) {
+            const pending: StoredPending = {
+              url: msg.url,
+              username: msg.username,
+              password: msg.password,
+              capturedAt: Date.now(),
+            };
+            await browser.storage.session.set({ pending });
+          }
+          return { ok: true };
+        })();
+
+      case "getPending":
+        return (async (): Promise<PendingResponse> => ({ pending: await readPending() }))();
+
+      case "dismissPending":
+        return (async (): Promise<{ ok: true }> => {
+          await browser.storage.session.remove("pending");
+          return { ok: true };
         })();
 
       default:

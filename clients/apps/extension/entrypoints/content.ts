@@ -1,7 +1,8 @@
-import type { FillMessage } from "../utils/protocol";
+import type { BgRequest, FillMessage } from "../utils/protocol";
 
 // Content script: fills credentials into the page only when the popup explicitly
-// asks (user-initiated). It never receives or holds credentials otherwise.
+// asks (user-initiated), and reports a login on submit so the popup can offer to
+// save it. It never stores credentials itself and shows no UI on the page.
 export default defineContentScript({
   matches: ["http://*/*", "https://*/*"],
   main() {
@@ -13,8 +14,32 @@ export default defineContentScript({
       }
       return undefined;
     });
+
+    // Save-on-submit: when a form with a password is submitted, hand the entered
+    // credentials to the background worker, which holds them briefly so the popup
+    // can offer to save. Capture phase so we still see it if the page calls
+    // preventDefault or navigates immediately.
+    window.addEventListener("submit", (e) => captureFrom(e.target), true);
   },
 });
+
+function captureFrom(target: EventTarget | null): void {
+  const scope = target instanceof HTMLElement ? target : document;
+  const pw = scope.querySelector<HTMLInputElement>('input[type="password"]');
+  if (!pw?.value) return;
+  const user = scope.querySelector<HTMLInputElement>(
+    'input[type="email"], input[autocomplete="username"], input[name*="user" i], input[id*="user" i], input[name*="email" i], input[type="text"], input[type="tel"]',
+  );
+  const capture: BgRequest = {
+    type: "captureLogin",
+    url: location.href,
+    username: user?.value ?? "",
+    password: pw.value,
+  };
+  browser.runtime.sendMessage(capture).catch(() => {
+    // background may be mid-wake or the page is closing; the capture is best-effort
+  });
+}
 
 function fillLoginForm(username: string, password: string): boolean {
   const pw = document.querySelector<HTMLInputElement>('input[type="password"]');

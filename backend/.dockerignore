@@ -1,0 +1,9 @@
+# Keep the build context small and never ship local data/builds.
+bin/
+data/
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example

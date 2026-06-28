@@ -5,8 +5,10 @@ import { App } from "./App";
 import "./style.css";
 
 // Point the shared client at the backend host (declared in host_permissions).
-// For production, swap this for the deployed API origin.
-configureApi({ baseUrl: "http://localhost:8080" });
+// Override with WXT_API_BASE for production (see .env.example).
+configureApi({
+  baseUrl: (import.meta.env as Record<string, string | undefined>).WXT_API_BASE ?? "http://localhost:8080",
+});
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

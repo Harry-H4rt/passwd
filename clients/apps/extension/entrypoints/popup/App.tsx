@@ -13,7 +13,10 @@ import {
   hostMatches,
 } from "../../utils/protocol";
 
-const WEB_VAULT_URL = "http://localhost:5173";
+// Web vault URL for the "create an account" link. Override with WXT_VAULT_URL
+// for production (see .env.example).
+const WEB_VAULT_URL =
+  (import.meta.env as Record<string, string | undefined>).WXT_VAULT_URL ?? "http://localhost:5173";
 
 export function App() {
   const [loading, setLoading] = useState(true);

@@ -1,7 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import Icon from "../components/Icon.astro";
-const GITHUB_URL = "https://github.com/Harry-H4rt/passwd";
+import { VAULT_URL, GITHUB_URL } from "../config";
 
 const faqs = [
   ["Do I need to give an email?", "No. You can create an account with a generated passphrase: no email, phone, or personal details. Email is an optional convenience, and even then it's only ever stored as a blinded hash."],
@@ -43,7 +43,7 @@ const faqs = [
           <span class="icon"><Icon name="globe" size={22} /></span>
           <h3>Web vault</h3>
           <p>Open the vault in any modern browser, with nothing to install.</p>
-          <p style="margin-top:14px;"><a class="btn btn-primary" href="http://localhost:5173">Open vault</a></p>
+          <p style="margin-top:14px;"><a class="btn btn-primary" href={VAULT_URL}>Open vault</a></p>
         </div>
         <div class="card">
           <span class="icon"><Icon name="puzzle" size={22} /></span>

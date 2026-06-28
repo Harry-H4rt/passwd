@@ -1,8 +1,12 @@
 import { defineConfig } from "wxt";
 
 // WXT generates the MV3 manifest. host_permissions lets the popup fetch the
-// backend cross-origin without CORS (granted hosts bypass CORS in MV3). For a
-// real deployment, replace localhost with the production API origin.
+// backend cross-origin without CORS (granted hosts bypass CORS in MV3). The
+// origin is derived from WXT_API_BASE so a production build grants only the real
+// API host. Export WXT_API_BASE (and WXT_VAULT_URL) when building for prod.
+const API_BASE = process.env.WXT_API_BASE || "http://localhost:8080";
+const API_ORIGIN = new URL(API_BASE).origin + "/*";
+
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   vite: () => ({
@@ -23,7 +27,7 @@ export default defineConfig({
     name: "passwd",
     description: "Zero-knowledge password manager",
     permissions: ["storage", "clipboardWrite", "activeTab", "alarms"],
-    host_permissions: ["http://localhost:8080/*"],
+    host_permissions: [API_ORIGIN],
     action: {
       default_title: "passwd",
     },

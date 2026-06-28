@@ -1,7 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import Icon from "../components/Icon.astro";
-const VAULT_URL = "http://localhost:5173";
+import { VAULT_URL } from "../config";
 
 const features = [
   { icon: "shield", title: "Zero-knowledge", body: "Everything is encrypted on your device. The server only ever stores ciphertext it can't read." },

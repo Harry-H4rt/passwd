@@ -80,8 +80,10 @@ runnable and tested. **Security review gates ship before real user data.**
 - [ ] Desktop app (Tauri) wrapping the web vault → real installers for the
       site's Download button
 - [ ] Extension store submissions (Chrome Web Store, AMO)
-- [ ] Signed release binaries + self-host docs (Docker)
-- [ ] Wire web/extension/site to a configurable production API + vault URL
+- [x] Self-host docs + Docker (backend Dockerfile + docker-compose); signed
+      release binaries still TODO
+- [x] Wire web/extension/site to a configurable production API + vault URL
+      (VITE_API_BASE / WXT_API_BASE+WXT_VAULT_URL / PUBLIC_VAULT_URL)
 
 ## Phase 7 — SaaS evolution
 

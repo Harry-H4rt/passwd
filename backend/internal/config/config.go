@@ -29,9 +29,9 @@ func Load() Config {
 	return Config{
 		Addr:                getenv("PASSWD_ADDR", ":8080"),
 		Environment:         getenv("PASSWD_ENV", "development"),
-		JWTSecret:           getenv("PASSWD_JWT_SECRET", "dev-only-insecure-secret-change-me"),
+		JWTSecret:           getSecret("PASSWD_JWT_SECRET", "dev-only-insecure-secret-change-me"),
 		DBPath:              getenv("PASSWD_DB", "data/passwd.db"),
-		IdentifierPepper:    getenv("PASSWD_IDENTIFIER_PEPPER", "dev-only-insecure-pepper-change-me"),
+		IdentifierPepper:    getSecret("PASSWD_IDENTIFIER_PEPPER", "dev-only-insecure-pepper-change-me"),
 		AuthRateLimitPerMin: getenvInt("PASSWD_AUTH_RATELIMIT_PER_MIN", 60),
 		AllowedOrigins:      splitList(getenv("PASSWD_ALLOWED_ORIGINS", "http://localhost:5173")),
 	}
@@ -44,6 +44,21 @@ func getenv(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// getSecret resolves a secret from "<KEY>_FILE" (the file's trimmed contents)
+// first, then "<KEY>" (the env value), else the fallback. The _FILE form is the
+// standard way to inject Docker/Kubernetes secrets mounted as files, so the value
+// never sits in the process environment or compose file.
+func getSecret(key, fallback string) string {
+	if path := os.Getenv(key + "_FILE"); path != "" {
+		if b, err := os.ReadFile(path); err == nil {
+			if s := strings.TrimSpace(string(b)); s != "" {
+				return s
+			}
+		}
+	}
+	return getenv(key, fallback)
 }
 
 func getenvInt(key string, fallback int) int {

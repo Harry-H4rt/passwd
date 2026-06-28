@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { type Session, registerAccount, loginAccount, newAccountId } from "./session";
+import { type Session, registerAccount, loginAccount, newAccountId } from "@passwd/api-client";
 import { VaultScreen } from "./VaultScreen";
 
 export function App() {

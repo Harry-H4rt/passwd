@@ -8,7 +8,7 @@ import {
   saveItem,
   removeItem,
   generatePassword,
-} from "./session";
+} from "@passwd/api-client";
 
 export function VaultScreen(props: {
   session: Session;

@@ -40,17 +40,21 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Lock clears the in-memory user key
 - [x] Password generator
 - [x] One-time recovery-passphrase display on sign-up
+- [x] Extracted shared `@passwd/api-client` (now used by web + extension)
 - [ ] Auto-lock on idle timeout (only manual lock so far)
 - [ ] Import/export (encrypted + plaintext-with-warning)
-- [ ] Extract a shared `@passwd/api-client` (currently inline in the web app)
 
-## Phase 4 — Browser extension (MV3, WXT)
+## Phase 4 — Browser extension (MV3, WXT) ✅ (MVP)
 
-- [ ] Reuse `@passwd/crypto` + `@passwd/api-client`
-- [ ] Popup vault, unlock, search
+- [x] WXT MV3 extension reusing `@passwd/crypto` + `@passwd/api-client`
+- [x] Popup: unlock, vault list, search, copy username/password, lock
+- [x] Chrome build (`wxt build` → `.output/chrome-mv3`); Firefox target wired
+      (`build:firefox`)
 - [ ] Autofill with **domain matching** (anti-phishing)
 - [ ] Save-on-submit detection
-- [ ] Chrome + Firefox builds
+- [ ] Persist unlocked session across popup opens (chrome.storage.session) +
+      add/edit items from the popup
+- [ ] Custom icons
 
 ## Phase 5 — Hardening & 2FA
 

@@ -1,9 +1,12 @@
 // Thin typed client for the passwd backend. Transport only — it sends/receives
 // the ciphertext produced by @passwd/crypto and never handles plaintext secrets.
+//
+// The base URL is configurable: the web vault leaves it "" (same-origin, via the
+// Vite dev proxy / co-hosted in prod); the browser extension points it at the
+// backend host (which it lists in host_permissions).
 
 import type { KdfParams } from "@passwd/crypto";
 
-// The KDF descriptor crosses the wire verbatim; reuse the crypto package's type.
 export type Kdf = KdfParams;
 
 export interface LoginResult {
@@ -27,11 +30,17 @@ export interface RegistrationBundle {
   protectedUserKey: string;
 }
 
+let baseUrl = "";
+
+export function configureApi(opts: { baseUrl: string }): void {
+  baseUrl = opts.baseUrl.replace(/\/$/, "");
+}
+
 async function call<T>(method: string, path: string, body?: unknown, token?: string): Promise<T> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["content-type"] = "application/json";
   if (token) headers["authorization"] = `Bearer ${token}`;
-  const res = await fetch(path, {
+  const res = await fetch(baseUrl + path, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),

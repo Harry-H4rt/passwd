@@ -33,12 +33,16 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Integration test (register → login → refresh → CRUD → sync, owner isolation)
 - [ ] Audit log (deferred)
 
-## Phase 3 — Web vault
+## Phase 3 — Web vault ✅ (MVP)
 
-- [ ] Vite + React app: register, unlock, vault list, item CRUD
-- [ ] Auto-lock / clear keys from memory on lock
-- [ ] Password generator
+- [x] Vite + React app: register (passphrase or email), sign in/unlock, vault
+      list, item add/edit/delete, search, copy
+- [x] Lock clears the in-memory user key
+- [x] Password generator
+- [x] One-time recovery-passphrase display on sign-up
+- [ ] Auto-lock on idle timeout (only manual lock so far)
 - [ ] Import/export (encrypted + plaintext-with-warning)
+- [ ] Extract a shared `@passwd/api-client` (currently inline in the web app)
 
 ## Phase 4 — Browser extension (MV3, WXT)
 

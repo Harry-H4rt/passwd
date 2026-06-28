@@ -9,7 +9,7 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Go backend that compiles & runs (`/healthz`, route stubs, in-memory store)
 - [x] `@passwd/crypto` package: key hierarchy implemented in TypeScript
 - [x] `@passwd/api-client` typed client (shared by web vault + extension)
-- [ ] CI (build + test Go and TS)
+- [x] CI (build + test Go and TS) — GitHub Actions on push/PR to main
 
 ## Phase 1 — Crypto correctness ✅
 

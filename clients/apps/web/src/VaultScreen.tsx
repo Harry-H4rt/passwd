@@ -16,6 +16,7 @@ import {
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
 import { AsyncButton } from "./components/AsyncButton";
+import { ThemeToggle } from "./components/ThemeToggle";
 
 export function VaultScreen(props: {
   session: Session;
@@ -108,6 +109,7 @@ export function VaultScreen(props: {
         <button className="ghost" onClick={props.onLock}>
           Lock
         </button>
+        <ThemeToggle />
       </header>
 
       {props.recovery && (

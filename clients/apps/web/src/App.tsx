@@ -9,6 +9,7 @@ import {
 import { VaultScreen } from "./VaultScreen";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
+import { ThemeToggle } from "./components/ThemeToggle";
 
 // Lock (drop the in-memory user key) after this much inactivity.
 const IDLE_LOCK_MS = 15 * 60 * 1000;
@@ -127,6 +128,9 @@ function AuthScreen(props: {
 
   return (
     <div className="center">
+      <div className="auth-toolbar">
+        <ThemeToggle />
+      </div>
       <form className="card auth" onSubmit={submit}>
         <div className="brand-row">
           <Icon name="lock" size={22} />

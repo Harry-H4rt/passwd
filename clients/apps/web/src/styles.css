@@ -200,6 +200,34 @@ textarea:focus {
   color: var(--accent-600);
   background: var(--accent-soft);
 }
+.pwfield .reveal.icon-only {
+  padding: 6px;
+}
+
+/* Small helper text under a field */
+.hint {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+/* "Back to site" link, top-left of the auth screen */
+.back-link {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.back-link:hover {
+  color: var(--accent-600);
+}
 
 /* Buttons */
 button {

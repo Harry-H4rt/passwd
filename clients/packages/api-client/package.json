@@ -1,0 +1,9 @@
+{
+  "name": "@passwd/api-client",
+  "version": "0.0.0",
+  "description": "Typed HTTP client for the passwd backend (Phase 0 stub).",
+  "type": "module",
+  "dependencies": {
+    "@passwd/crypto": "*"
+  }
+}

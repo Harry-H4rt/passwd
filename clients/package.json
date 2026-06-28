@@ -1,0 +1,13 @@
+{
+  "name": "@passwd/clients",
+  "private": true,
+  "version": "0.0.0",
+  "description": "passwd client monorepo: shared crypto/api-client packages and the web + extension apps",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

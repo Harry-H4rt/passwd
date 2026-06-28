@@ -1,0 +1,7 @@
+{
+  "name": "@passwd/extension",
+  "version": "0.0.0",
+  "private": true,
+  "description": "passwd browser extension (Phase 4 — scaffold with WXT, see README.md).",
+  "type": "module"
+}

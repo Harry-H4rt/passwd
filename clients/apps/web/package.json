@@ -1,0 +1,7 @@
+{
+  "name": "@passwd/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "passwd web vault (Phase 3 — scaffold with Vite, see README.md).",
+  "type": "module"
+}

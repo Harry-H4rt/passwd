@@ -13,7 +13,7 @@ import {
   generateAccountId,
   DEFAULT_KDF,
 } from "@passwd/crypto";
-import * as api from "./api";
+import * as api from "./api.js";
 
 export interface Session {
   identifier: string;

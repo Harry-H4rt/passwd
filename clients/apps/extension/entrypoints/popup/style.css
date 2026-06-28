@@ -1,0 +1,163 @@
+:root {
+  --bg: #0e1116;
+  --panel: #171c24;
+  --panel-2: #1f2630;
+  --border: #2a323d;
+  --text: #e6edf3;
+  --muted: #8b97a7;
+  --accent: #4f8cff;
+  --danger: #ff6b6b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 340px;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0 0 12px;
+}
+
+input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 9px 11px;
+  font: inherit;
+  margin-bottom: 8px;
+}
+input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  padding: 8px 12px;
+}
+button:disabled {
+  opacity: 0.6;
+}
+.primary {
+  background: var(--accent);
+  color: #fff;
+  width: 100%;
+  border: none;
+  font-weight: 600;
+}
+.ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  font-size: 12px;
+}
+.ghost:hover {
+  border-color: var(--accent);
+}
+
+.unlock {
+  padding: 16px;
+}
+.unlock h1 {
+  text-align: center;
+}
+.link {
+  display: block;
+  margin-top: 12px;
+  color: var(--accent);
+  font-size: 12px;
+  text-align: center;
+  text-decoration: none;
+}
+
+.vault {
+  padding: 12px;
+}
+.vault header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.brand {
+  font-weight: 700;
+}
+.search {
+  margin-bottom: 10px;
+}
+
+ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.info {
+  min-width: 0;
+  flex: 1;
+}
+.name {
+  font-weight: 600;
+}
+.sub {
+  color: var(--muted);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.actions {
+  display: flex;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+.muted a {
+  color: var(--accent);
+}
+.error {
+  color: var(--danger);
+  font-size: 13px;
+  margin: 6px 0;
+}
+.toast {
+  position: fixed;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+}

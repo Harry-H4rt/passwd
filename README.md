@@ -49,6 +49,20 @@ Then open <http://localhost:5173>, click **Generate a private passphrase**, set 
 master password, and create your account. Everything is encrypted in the browser;
 the server only ever stores ciphertext.
 
+### Browser extension (Chrome)
+
+```bash
+cd clients
+npm -w @passwd/extension run build       # -> apps/extension/.output/chrome-mv3
+# or live-reload dev:  npm -w @passwd/extension run dev
+```
+
+Load it in Chrome: `chrome://extensions` → enable **Developer mode** → **Load
+unpacked** → select `clients/apps/extension/.output/chrome-mv3`. With the backend
+running, click the extension icon, unlock with your identifier + master password,
+and your vault appears. (The popup currently does quick-access view + copy;
+add/edit happens in the web vault.)
+
 ### Tests
 
 ```bash

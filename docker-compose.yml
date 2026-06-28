@@ -1,0 +1,26 @@
+# Self-host the passwd backend. Copy .env.example to .env and set the secrets
+# first (the server refuses to boot in production with the dev defaults).
+#
+#   cp .env.example .env   # then edit
+#   docker compose up -d --build
+#
+# Terminate TLS in front of this (reverse proxy / load balancer).
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      PASSWD_ENV: production
+      PASSWD_JWT_SECRET: ${PASSWD_JWT_SECRET:?set PASSWD_JWT_SECRET in .env}
+      PASSWD_IDENTIFIER_PEPPER: ${PASSWD_IDENTIFIER_PEPPER:?set PASSWD_IDENTIFIER_PEPPER in .env}
+      PASSWD_ALLOWED_ORIGINS: ${PASSWD_ALLOWED_ORIGINS:-}
+      PASSWD_DB: /data/passwd.db
+      PASSWD_ADDR: ":8080"
+    ports:
+      - "8080:8080"
+    volumes:
+      - passwd-data:/data
+    restart: unless-stopped
+
+volumes:
+  passwd-data:

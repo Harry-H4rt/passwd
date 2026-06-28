@@ -1,6 +1,7 @@
 ---
 import "../styles/global.css";
 import Icon from "../components/Icon.astro";
+import { VAULT_URL, GITHUB_URL } from "../config";
 
 interface Props {
   title?: string;
@@ -13,10 +14,6 @@ const {
   description = "A password manager that literally can't read your passwords. Zero-knowledge, end-to-end encrypted, open source.",
   active = "",
 } = Astro.props;
-
-// Where "Open vault" points. Set to your deployed web-vault URL in production.
-const VAULT_URL = "http://localhost:5173";
-const GITHUB_URL = "https://github.com/Harry-H4rt/passwd";
 
 const links = [
   { href: "/features", label: "Features", key: "features" },

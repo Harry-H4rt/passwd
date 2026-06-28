@@ -22,7 +22,9 @@ import type {
 // browser closes), so it survives the service worker sleeping/waking but is
 // dropped on browser exit. An idle timer (chrome.alarms) locks it sooner.
 
-const API_BASE = "http://localhost:8080";
+// Build-time API origin (see clients/apps/extension/.env.example). Must match the
+// manifest host_permissions origin in wxt.config.ts.
+const API_BASE = (import.meta.env as Record<string, string | undefined>).WXT_API_BASE ?? "http://localhost:8080";
 const IDLE_MS = 15 * 60 * 1000;
 const LOCK_ALARM = "passwd-lock";
 // A captured login is only offered to save for a short window, so a stale

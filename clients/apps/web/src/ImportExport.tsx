@@ -11,6 +11,7 @@ import {
 import { encryptBackup, decryptBackup, isBackupEnvelope } from "@passwd/crypto";
 import { PasswordField } from "./components/PasswordField";
 import { AsyncButton } from "./components/AsyncButton";
+import { Icon } from "./components/Icon";
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -122,15 +123,6 @@ export function ImportExport(props: {
           <h3>Export</h3>
           <p className="muted">{props.items.length} item{props.items.length === 1 ? "" : "s"} in this vault.</p>
 
-          <label>Encrypted backup passphrase</label>
-          <PasswordField value={exportPass} onChange={setExportPass} placeholder="protects the backup file" />
-          {exportErr && <div className="error">{exportErr}</div>}
-          <div className="row">
-            <AsyncButton variant="primary" loadingLabel="Encrypting" successLabel="Downloaded" onClick={exportEncrypted}>
-              Download encrypted backup
-            </AsyncButton>
-          </div>
-
           <div className="warn-banner">
             Plain exports are <strong>unencrypted</strong> and contain every password in clear text. Store them
             briefly, then delete.
@@ -143,6 +135,15 @@ export function ImportExport(props: {
               CSV
             </button>
           </div>
+
+          <label>Encrypted backup passphrase</label>
+          <PasswordField value={exportPass} onChange={setExportPass} placeholder="protects the backup file" />
+          {exportErr && <div className="error">{exportErr}</div>}
+          <AsyncButton variant="primary" loadingLabel="Encrypting" successLabel="Downloaded" onClick={exportEncrypted}>
+            <span className="btn-ico">
+              <Icon name="download" size={16} /> Download encrypted backup
+            </span>
+          </AsyncButton>
         </section>
 
         <section className="ie-section">

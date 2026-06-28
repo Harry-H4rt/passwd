@@ -45,9 +45,9 @@ npm install
 npm -w @passwd/web run dev
 ```
 
-Then open <http://localhost:5173>, click **Generate a private passphrase**, set a
-master password, and create your account. Everything is encrypted in the browser;
-the server only ever stores ciphertext.
+Then open <http://localhost:5173>, click the **dice** in the identifier box to roll
+a private passphrase, set a master password, and create your account. Everything is
+encrypted in the browser; the server only ever stores ciphertext.
 
 ### Browser extension (Chrome & Firefox)
 
@@ -66,8 +66,8 @@ npm -w @passwd/extension run build:firefox  # Firefox -> apps/extension/.output/
 live reload.)
 
 With the backend running, click the extension icon, unlock with your identifier +
-master password, and your vault appears. The popup currently does quick-access
-view + copy; add/edit happens in the web vault.
+master password, and your vault appears. The popup supports quick-access view/copy,
+autofill, add/edit/delete, and a save-on-submit prompt when you log into a site.
 
 ### Tests
 
@@ -78,6 +78,21 @@ cd clients  && npm -w @passwd/crypto run test # TS: crypto + shared vectors
 
 Two-factor (TOTP) can be enabled from the vault's **2FA** button; logins then
 prompt for a code.
+
+### Troubleshooting
+
+**A change isn't showing up (a tweak appears to "revert" to the old version).**
+The Vite dev server's file watcher can desync after a `git` branch switch or merge
+and keep serving a stale bundle, so even a hard reload (Ctrl+Shift+R) shows the old
+code. Restart the dev server:
+
+```bash
+# stop the running `npm -w @passwd/web run dev`, then start it again
+cd clients && npm -w @passwd/web run dev
+```
+
+The same applies to the Astro `site` and the extension dev servers — if edits seem
+ignored, restart the relevant dev process.
 
 See [`docs/ROADMAP.md`](docs/ROADMAP.md) for the build plan and status, and
 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for production hardening and publishing

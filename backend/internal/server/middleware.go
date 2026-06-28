@@ -48,7 +48,7 @@ func userIDFrom(ctx context.Context) (string, bool) {
 func (s *Server) cors(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
-		if origin != "" && s.allowedOrigins[origin] {
+		if origin != "" && (s.allowedOrigins[origin] || isExtensionOrigin(origin)) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
@@ -105,6 +105,15 @@ func (s *Server) rateLimit(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// Browser extensions have a per-install, unguessable origin (moz-extension:// or
+// chrome-extension://) that can't be pre-listed. The API is bearer-token only (no
+// cookies), so reflecting these origins is safe and lets the extension's
+// background worker call the API.
+func isExtensionOrigin(origin string) bool {
+	return strings.HasPrefix(origin, "moz-extension://") ||
+		strings.HasPrefix(origin, "chrome-extension://")
 }
 
 func clientIP(r *http.Request) string {

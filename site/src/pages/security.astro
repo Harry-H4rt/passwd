@@ -2,21 +2,21 @@
 import Base from "../layouts/Base.astro";
 
 const steps = [
-  ["You set a master password", "It never leaves your device. It isn't sent to the server, ever — not even hashed-for-login in its raw form."],
+  ["You set a master password", "It never leaves your device. It isn't sent to the server at all, not even hashed-for-login in its raw form."],
   ["Your device derives a key", "Argon2id turns your master password into an encryption key, salted by your account identifier."],
   ["Your vault is encrypted locally", "Every item is sealed with AES-256-GCM using a key only your device can compute."],
   ["Only ciphertext is synced", "The server receives and stores encrypted blobs. It has nothing it could decrypt."],
 ];
 ---
 
-<Base title="Security — passwd" active="security">
+<Base title="Security | passwd" active="security">
   <section class="hero" style="padding-bottom:40px;">
     <div class="container">
       <span class="eyebrow">How it works</span>
       <h1>Zero-knowledge, explained plainly.</h1>
       <p class="lead" style="margin-inline:auto;">
         “Zero-knowledge” means the service literally cannot read your data. Here's how that
-        works — and what it means for you.
+        works, and what it means for you.
       </p>
     </div>
   </section>
@@ -50,10 +50,10 @@ const steps = [
 
       <h2>The building blocks</h2>
       <ul>
-        <li><strong>Argon2id</strong> — memory-hard key derivation, resistant to brute force.</li>
-        <li><strong>AES-256-GCM</strong> — authenticated encryption for every vault item.</li>
-        <li><strong>HKDF</strong> — key separation so the login credential and the encryption key are never the same value.</li>
-        <li><strong>Blinded identifiers</strong> — your login handle is stored only as a keyed hash.</li>
+        <li><strong>Argon2id</strong>: memory-hard key derivation, resistant to brute force.</li>
+        <li><strong>AES-256-GCM</strong>: authenticated encryption for every vault item.</li>
+        <li><strong>HKDF</strong>: key separation so the login credential and the encryption key are never the same value.</li>
+        <li><strong>Blinded identifiers</strong>: your login handle is stored only as a keyed hash.</li>
       </ul>
 
       <h2>What's in scope</h2>
@@ -65,7 +65,7 @@ const steps = [
 
       <div class="callout">
         <strong>Status:</strong> passwd is pre-1.0 and has not yet had an independent security
-        audit. The cryptographic design is public and documented — review it, and please don't
+        audit. The cryptographic design is public and documented, so review it, and please don't
         store irreplaceable secrets until the audit milestone is reached.
       </div>
     </div>

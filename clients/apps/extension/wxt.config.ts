@@ -8,7 +8,7 @@ export default defineConfig({
   manifest: {
     name: "passwd",
     description: "Zero-knowledge password manager",
-    permissions: ["storage", "clipboardWrite"],
+    permissions: ["storage", "clipboardWrite", "activeTab", "alarms"],
     host_permissions: ["http://localhost:8080/*"],
     action: {
       default_title: "passwd",

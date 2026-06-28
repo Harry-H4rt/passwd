@@ -12,12 +12,13 @@ import (
 )
 
 type Server struct {
-	cfg     config.Config
-	store   storage.Store
-	vault   *vault.Service
-	logger  *slog.Logger
-	limiter *rateLimiter
-	lockout *lockoutTracker
+	cfg            config.Config
+	store          storage.Store
+	vault          *vault.Service
+	logger         *slog.Logger
+	limiter        *rateLimiter
+	lockout        *lockoutTracker
+	allowedOrigins map[string]bool
 }
 
 func New(cfg config.Config, store storage.Store, logger *slog.Logger) *Server {
@@ -25,13 +26,18 @@ func New(cfg config.Config, store storage.Store, logger *slog.Logger) *Server {
 	if rate <= 0 {
 		rate = 60
 	}
+	allowed := make(map[string]bool, len(cfg.AllowedOrigins))
+	for _, o := range cfg.AllowedOrigins {
+		allowed[o] = true
+	}
 	return &Server{
-		cfg:     cfg,
-		store:   store,
-		vault:   vault.New(store),
-		logger:  logger,
-		limiter: newRateLimiter(rate, time.Minute),
-		lockout: newLockoutTracker(5, 15*time.Minute), // 5 fails -> 15 min lock
+		cfg:            cfg,
+		store:          store,
+		vault:          vault.New(store),
+		logger:         logger,
+		limiter:        newRateLimiter(rate, time.Minute),
+		lockout:        newLockoutTracker(5, 15*time.Minute), // 5 fails -> 15 min lock
+		allowedOrigins: allowed,
 	}
 }
 
@@ -57,7 +63,7 @@ func (s *Server) Routes() http.Handler {
 }
 
 func (s *Server) withMiddleware(next http.Handler) http.Handler {
-	return s.recoverer(s.requestLogger(s.securityHeaders(next)))
+	return s.recoverer(s.requestLogger(s.cors(s.securityHeaders(next))))
 }
 
 func (s *Server) recoverer(next http.Handler) http.Handler {
@@ -90,6 +96,11 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("Cache-Control", "no-store")
+		// This service only ever returns JSON; lock the page down entirely.
+		w.Header().Set("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'")
+		if s.cfg.IsProduction() {
+			w.Header().Set("Strict-Transport-Security", "max-age=63072000; includeSubDomains")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

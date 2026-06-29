@@ -13,6 +13,7 @@ import {
   generateAccountId,
   DEFAULT_KDF,
 } from "@passwd/crypto";
+import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
 import * as api from "./api.js";
 
 export interface Session {
@@ -36,12 +37,15 @@ export type ItemFields = Omit<VaultItem, "id">;
 
 export const newAccountId = () => generateAccountId();
 
-// Thrown by loginAccount when the account has 2FA enabled and no/invalid code was
-// supplied. The UI should prompt for a code and call loginAccount again with it.
+// Thrown by loginAccount when the account has 2FA enabled and no factor was
+// supplied. `methods` lists the enrolled factors ("webauthn", "totp") so the UI can
+// offer a choice: retry loginAccount with a TOTP code, or call loginWithPasskey.
 export class TwoFactorRequiredError extends Error {
-  constructor() {
+  methods: string[];
+  constructor(methods: string[] = []) {
     super("two-factor authentication required");
     this.name = "TwoFactorRequiredError";
+    this.methods = methods;
   }
 }
 
@@ -66,8 +70,24 @@ export async function loginAccount(
   const masterPasswordHash = await deriveMasterPasswordHash(masterKey, masterPassword);
   const res = await api.login(identifier, masterPasswordHash, totpCode);
   if ("twoFactorRequired" in res && res.twoFactorRequired) {
-    throw new TwoFactorRequiredError();
+    throw new TwoFactorRequiredError(res.methods);
   }
+  const stretched = await stretchMasterKey(masterKey);
+  const userKey = await unwrapUserKey(stretched, res.protectedUserKey);
+  return { identifier, accessToken: res.accessToken, refreshToken: res.refreshToken, userKey };
+}
+
+// Completes a passkey (WebAuthn) second-factor login. The password is verified
+// first (same derivation as loginAccount), then the server issues an assertion
+// challenge which the authenticator signs. Call this when a TwoFactorRequiredError
+// lists "webauthn" among its methods.
+export async function loginWithPasskey(identifier: string, masterPassword: string): Promise<Session> {
+  const { kdf } = await api.prelogin(identifier);
+  const masterKey = await deriveMasterKey(masterPassword, identifier, kdf);
+  const masterPasswordHash = await deriveMasterPasswordHash(masterKey, masterPassword);
+  const { sessionId, options } = await api.webauthnLoginBegin(identifier, masterPasswordHash);
+  const assertion = await startAuthentication({ optionsJSON: options.publicKey });
+  const res = await api.webauthnLoginFinish(identifier, masterPasswordHash, sessionId, assertion);
   const stretched = await stretchMasterKey(masterKey);
   const userKey = await unwrapUserKey(stretched, res.protectedUserKey);
   return { identifier, accessToken: res.accessToken, refreshToken: res.refreshToken, userKey };
@@ -84,6 +104,23 @@ export async function setupTwoFactor(s: Session): Promise<{ secret: string; otpa
 
 export const enableTwoFactor = (s: Session, code: string) => api.twoFactorEnable(s.accessToken, code);
 export const disableTwoFactor = (s: Session, code: string) => api.twoFactorDisable(s.accessToken, code);
+
+// --- passkeys (WebAuthn) ----------------------------------------------------
+
+export const listPasskeys = (s: Session) =>
+  api.webauthnCredentials(s.accessToken).then((r) => r.credentials);
+
+export const removePasskey = (s: Session, id: string) =>
+  api.webauthnDeleteCredential(s.accessToken, id);
+
+// Enrolls a new passkey: the server issues creation options, the authenticator
+// creates the keypair (prompting biometric/PIN), and the attestation is verified
+// and stored server-side. `name` is a user-facing label.
+export async function enrollPasskey(s: Session, name: string): Promise<{ id: string; name: string }> {
+  const { sessionId, options } = await api.webauthnRegisterBegin(s.accessToken);
+  const attestation = await startRegistration({ optionsJSON: options.publicKey });
+  return api.webauthnRegisterFinish(s.accessToken, sessionId, name, attestation);
+}
 
 // Built client-side so the plaintext identifier (used as the account label) never
 // reaches the server.

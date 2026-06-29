@@ -16,7 +16,7 @@ export interface PendingSave {
 // popup -> background, plus captureLogin from the content script.
 export type BgRequest =
   | { type: "getState" }
-  | { type: "unlock"; identifier: string; masterPassword: string }
+  | { type: "unlock"; identifier: string; masterPassword: string; totpCode?: string }
   | { type: "lock" }
   | { type: "getItems" }
   | { type: "addItem"; fields: ItemFields }
@@ -40,6 +40,12 @@ export interface ItemsResponse {
 export interface UnlockResponse {
   ok?: boolean;
   error?: string;
+  // Set when the password is correct but a second factor is required. `methods`
+  // lists the enrolled factors ("webauthn", "totp"). The popup can complete a TOTP
+  // unlock inline; passkeys can't be asserted from the extension origin, so the
+  // popup directs the user to the web vault for those.
+  twoFactorRequired?: boolean;
+  methods?: string[];
 }
 
 // Result of a vault mutation (add/update/delete).

@@ -58,6 +58,25 @@ type Cipher struct {
 	UpdatedAt time.Time
 }
 
+// WebAuthnCredential is an enrolled passkey used as a second factor. Like the TOTP
+// secret it is an auth factor (the server must verify assertions against it), never
+// vault content. A passkey stores only a public key, so a DB leak cannot be used to
+// authenticate. The plaintext identifier never appears here — credentials are owned
+// by the random UserID.
+type WebAuthnCredential struct {
+	ID              string // our row id
+	UserID          string
+	CredentialID    []byte // the authenticator's credential ID (unique per passkey)
+	PublicKey       []byte // COSE public key
+	AttestationType string
+	Transports      string // JSON array of transport hints ("usb","internal",...)
+	AAGUID          []byte // authenticator model id
+	SignCount       uint32 // last seen signature counter (clone detection)
+	Name            string // user-facing label, e.g. "YubiKey 5"
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
 // RefreshToken is a persisted, rotatable session credential. Only a hash of the
 // opaque token is stored, so a DB leak cannot be used to mint sessions.
 type RefreshToken struct {
@@ -74,6 +93,12 @@ type Store interface {
 	GetUserByIdentifierHash(ctx context.Context, identifierHash string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	SetUserTOTP(ctx context.Context, userID, secret string, enabled bool) error
+
+	CreateWebAuthnCredential(ctx context.Context, c WebAuthnCredential) error
+	ListWebAuthnCredentials(ctx context.Context, userID string) ([]WebAuthnCredential, error)
+	CountWebAuthnCredentials(ctx context.Context, userID string) (int, error)
+	UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, signCount uint32) error
+	DeleteWebAuthnCredential(ctx context.Context, userID, id string) error
 
 	CreateCipher(ctx context.Context, c Cipher) error
 	UpdateCipher(ctx context.Context, c Cipher) error

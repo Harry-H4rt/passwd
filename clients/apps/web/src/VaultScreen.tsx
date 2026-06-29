@@ -12,6 +12,10 @@ import {
   setupTwoFactor,
   enableTwoFactor,
   disableTwoFactor,
+  listPasskeys,
+  enrollPasskey,
+  removePasskey,
+  type WebAuthnCredentialSummary,
 } from "@passwd/api-client";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
@@ -32,6 +36,7 @@ export function VaultScreen(props: {
   const [editing, setEditing] = useState<VaultItem | null>(null);
   const [query, setQuery] = useState("");
   const [show2fa, setShow2fa] = useState(false);
+  const [showPasskeys, setShowPasskeys] = useState(false);
   const [showData, setShowData] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -129,6 +134,9 @@ export function VaultScreen(props: {
           <button className="nav-item" onClick={() => setShow2fa(true)}>
             <Icon name="settings" size={16} /> Two-factor (2FA)
           </button>
+          <button className="nav-item" onClick={() => setShowPasskeys(true)}>
+            <Icon name="lock" size={16} /> Passkeys
+          </button>
         </nav>
         <div className="sidebar-footer">
           <button
@@ -221,6 +229,7 @@ export function VaultScreen(props: {
 
       {editing && <ItemEditor item={editing} onCancel={() => setEditing(null)} onSave={handleSave} />}
       {show2fa && <TwoFactor session={session} onClose={() => setShow2fa(false)} />}
+      {showPasskeys && <Passkeys session={session} onClose={() => setShowPasskeys(false)} />}
       {showData && (
         <ImportExport
           session={session}
@@ -233,6 +242,113 @@ export function VaultScreen(props: {
         />
       )}
       {toast && <div className="toast">{toast}</div>}
+    </div>
+  );
+}
+
+function Passkeys(props: { session: Session; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [creds, setCreds] = useState<WebAuthnCredentialSummary[]>([]);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  function refresh() {
+    return listPasskeys(props.session)
+      .then(setCreds)
+      .catch((e) => setError(errMsg(e)));
+  }
+
+  useEffect(() => {
+    refresh().finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.session]);
+
+  const supported = typeof window !== "undefined" && !!window.PublicKeyCredential;
+
+  return (
+    <div className="modal-backdrop" onClick={props.onClose}>
+      <div className="card modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Passkeys</h2>
+        <p className="muted">
+          A passkey is a phishing-resistant second factor: at sign-in you confirm with your
+          device (Touch ID, Windows Hello, or a security key) instead of, or alongside, a code.
+        </p>
+        {!supported && (
+          <div className="error">This browser does not support passkeys.</div>
+        )}
+        {loading ? (
+          <p className="muted">Loading...</p>
+        ) : (
+          <>
+            {creds.length > 0 ? (
+              <ul className="passkey-list">
+                {creds.map((c) => (
+                  <li key={c.id} className="passkey-row">
+                    <span>
+                      <strong>{c.name}</strong>
+                      <span className="muted"> · added {new Date(c.createdAt).toLocaleDateString()}</span>
+                    </span>
+                    <AsyncButton
+                      variant="ghost"
+                      danger
+                      loadingLabel="Removing"
+                      successLabel="Removed"
+                      onClick={async () => {
+                        setError(null);
+                        try {
+                          await removePasskey(props.session, c.id);
+                          await refresh();
+                          return true;
+                        } catch (e) {
+                          setError(errMsg(e));
+                          return false;
+                        }
+                      }}
+                    >
+                      Remove
+                    </AsyncButton>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="muted">No passkeys yet.</p>
+            )}
+            <label>Name a new passkey</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. MacBook Touch ID"
+              autoFocus
+            />
+            {error && <div className="error">{error}</div>}
+            <div className="row end">
+              <button className="ghost" onClick={props.onClose}>
+                Close
+              </button>
+              <AsyncButton
+                variant="primary"
+                loadingLabel="Waiting for device"
+                successLabel="Added"
+                onClick={async () => {
+                  setError(null);
+                  if (!supported) return false;
+                  try {
+                    await enrollPasskey(props.session, name.trim() || "Passkey");
+                    setName("");
+                    await refresh();
+                    return true;
+                  } catch (e) {
+                    setError(errMsg(e));
+                    return false;
+                  }
+                }}
+              >
+                Add passkey
+              </AsyncButton>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }

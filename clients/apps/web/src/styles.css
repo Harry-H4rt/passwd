@@ -916,3 +916,49 @@ button {
     min-height: 160px;
   }
 }
+
+/* Passkeys management list */
+.passkey-list {
+  list-style: none;
+  margin: 4px 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.passkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--panel-2);
+}
+
+/* Second-factor chooser on the sign-in form */
+.twofactor {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+button.full {
+  width: 100%;
+  justify-content: center;
+}
+.or-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--muted);
+  font-size: 13px;
+  gap: 10px;
+}
+.or-divider::before,
+.or-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}

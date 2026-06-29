@@ -22,6 +22,15 @@ import (
 
 func newTestServer(t *testing.T) *httptest.Server {
 	t.Helper()
+	ts, _ := newTestServerStore(t)
+	return ts
+}
+
+// newTestServerStore is like newTestServer but also returns the backing store, so
+// tests can seed state (e.g. an enrolled passkey) that has no plaintext-friendly
+// API to create directly.
+func newTestServerStore(t *testing.T) (*httptest.Server, storage.Store) {
+	t.Helper()
 	store, err := storage.OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
@@ -33,11 +42,14 @@ func newTestServer(t *testing.T) *httptest.Server {
 		IdentifierPepper:    "test-pepper",
 		AuthRateLimitPerMin: 10000, // don't rate-limit the test client
 		AllowedOrigins:      []string{"http://localhost:5173"},
+		WebAuthnRPID:        "localhost",
+		WebAuthnRPName:      "passwd test",
+		WebAuthnRPOrigins:   []string{"http://localhost:5173"},
 	}
 	srv := New(cfg, store, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	ts := httptest.NewServer(srv.Routes())
 	t.Cleanup(ts.Close)
-	return ts
+	return ts, store
 }
 
 type client struct {

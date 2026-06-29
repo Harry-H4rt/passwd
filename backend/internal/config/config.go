@@ -23,9 +23,25 @@ type Config struct {
 	// (e.g. the web vault served from a different host). The API is bearer-token
 	// based (no cookies), so credentials are not allowed and "*" is unnecessary.
 	AllowedOrigins []string
+	// WebAuthnRPID is the WebAuthn Relying Party ID: the registrable domain of the
+	// vault (host only, no scheme/port), e.g. "vault.example.com". Passkeys are
+	// bound to it, so it must stay stable. Defaults to "localhost" for dev.
+	WebAuthnRPID string
+	// WebAuthnRPName is the human-facing Relying Party name shown by authenticators.
+	WebAuthnRPName string
+	// WebAuthnRPOrigins are the fully-qualified origins permitted to run passkey
+	// ceremonies (e.g. "https://vault.example.com"). Defaults to AllowedOrigins,
+	// which is where the web vault is served from.
+	WebAuthnRPOrigins []string
 }
 
 func Load() Config {
+	allowedOrigins := splitList(getenv("PASSWD_ALLOWED_ORIGINS", "http://localhost:5173"))
+	rpOrigins := splitList(getenv("PASSWD_WEBAUTHN_RP_ORIGINS", ""))
+	if len(rpOrigins) == 0 {
+		// Default the passkey ceremony origins to wherever the web vault is served.
+		rpOrigins = allowedOrigins
+	}
 	return Config{
 		Addr:                getenv("PASSWD_ADDR", ":8080"),
 		Environment:         getenv("PASSWD_ENV", "development"),
@@ -33,7 +49,10 @@ func Load() Config {
 		DBPath:              getenv("PASSWD_DB", "data/passwd.db"),
 		IdentifierPepper:    getSecret("PASSWD_IDENTIFIER_PEPPER", "dev-only-insecure-pepper-change-me"),
 		AuthRateLimitPerMin: getenvInt("PASSWD_AUTH_RATELIMIT_PER_MIN", 60),
-		AllowedOrigins:      splitList(getenv("PASSWD_ALLOWED_ORIGINS", "http://localhost:5173")),
+		AllowedOrigins:      allowedOrigins,
+		WebAuthnRPID:        getenv("PASSWD_WEBAUTHN_RP_ID", "localhost"),
+		WebAuthnRPName:      getenv("PASSWD_WEBAUTHN_RP_NAME", "passwd"),
+		WebAuthnRPOrigins:   rpOrigins,
 	}
 }
 

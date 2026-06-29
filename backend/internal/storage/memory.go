@@ -1,17 +1,21 @@
 package storage
 
 import (
+	"bytes"
 	"context"
+	"sort"
 	"sync"
+	"time"
 )
 
 // Memory is an in-memory Store for tests and ephemeral runs. Not durable.
 type Memory struct {
 	mu       sync.RWMutex
-	users    map[string]User         // id -> User
-	byIDHash map[string]string       // identifier hash -> user id
-	ciphers  map[string]Cipher       // id -> Cipher
-	refresh  map[string]RefreshToken // token hash -> RefreshToken
+	users    map[string]User               // id -> User
+	byIDHash map[string]string             // identifier hash -> user id
+	ciphers  map[string]Cipher             // id -> Cipher
+	refresh  map[string]RefreshToken       // token hash -> RefreshToken
+	passkeys map[string]WebAuthnCredential // row id -> credential
 }
 
 func NewMemory() *Memory {
@@ -20,6 +24,7 @@ func NewMemory() *Memory {
 		byIDHash: make(map[string]string),
 		ciphers:  make(map[string]Cipher),
 		refresh:  make(map[string]RefreshToken),
+		passkeys: make(map[string]WebAuthnCredential),
 	}
 }
 
@@ -66,6 +71,68 @@ func (m *Memory) SetUserTOTP(_ context.Context, userID, secret string, enabled b
 	u.TOTPSecret = secret
 	u.TOTPEnabled = enabled
 	m.users[userID] = u
+	return nil
+}
+
+func (m *Memory) CreateWebAuthnCredential(_ context.Context, c WebAuthnCredential) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, existing := range m.passkeys {
+		if bytes.Equal(existing.CredentialID, c.CredentialID) {
+			return ErrConflict
+		}
+	}
+	m.passkeys[c.ID] = c
+	return nil
+}
+
+func (m *Memory) ListWebAuthnCredentials(_ context.Context, userID string) ([]WebAuthnCredential, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]WebAuthnCredential, 0)
+	for _, c := range m.passkeys {
+		if c.UserID == userID {
+			out = append(out, c)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.Before(out[j].CreatedAt) })
+	return out, nil
+}
+
+func (m *Memory) CountWebAuthnCredentials(_ context.Context, userID string) (int, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	n := 0
+	for _, c := range m.passkeys {
+		if c.UserID == userID {
+			n++
+		}
+	}
+	return n, nil
+}
+
+func (m *Memory) UpdateWebAuthnSignCount(_ context.Context, credentialID []byte, signCount uint32) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for id, c := range m.passkeys {
+		if bytes.Equal(c.CredentialID, credentialID) {
+			c.SignCount = signCount
+			c.UpdatedAt = time.Now().UTC()
+			m.passkeys[id] = c
+			return nil
+		}
+	}
+	return ErrNotFound
+}
+
+func (m *Memory) DeleteWebAuthnCredential(_ context.Context, userID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.passkeys[id]
+	if !ok || c.UserID != userID {
+		return ErrNotFound
+	}
+	delete(m.passkeys, id)
 	return nil
 }
 

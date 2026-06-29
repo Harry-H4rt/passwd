@@ -5,6 +5,7 @@ import {
   addItem,
   saveItem,
   removeItem,
+  TwoFactorRequiredError,
   type Session,
 } from "@passwd/api-client";
 import type {
@@ -114,7 +115,7 @@ export default defineBackground(() => {
       case "unlock":
         return (async (): Promise<UnlockResponse> => {
           try {
-            const sess = await loginAccount(msg.identifier, msg.masterPassword);
+            const sess = await loginAccount(msg.identifier, msg.masterPassword, msg.totpCode);
             await writeStored({
               identifier: sess.identifier,
               accessToken: sess.accessToken,
@@ -124,6 +125,12 @@ export default defineBackground(() => {
             });
             return { ok: true };
           } catch (e) {
+            // A passkey assertion can't run in the extension popup's origin, so we
+            // only complete TOTP here; the popup links out to the web vault for
+            // passkey-only accounts.
+            if (e instanceof TwoFactorRequiredError) {
+              return { twoFactorRequired: true, methods: e.methods };
+            }
             return { error: e instanceof Error ? e.message : "unlock failed" };
           }
         })();

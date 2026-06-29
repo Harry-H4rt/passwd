@@ -3,6 +3,7 @@ import {
   type Session,
   registerAccount,
   loginAccount,
+  loginWithPasskey,
   newAccountId,
   TwoFactorRequiredError,
 } from "@passwd/api-client";
@@ -68,10 +69,15 @@ function AuthScreen(props: {
   const [generated, setGenerated] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [needTotp, setNeedTotp] = useState(false);
+  // Non-null once a first sign-in attempt reports a second factor is required; it
+  // holds the enrolled methods so we can offer a passkey, a TOTP code, or both.
+  const [twoFactor, setTwoFactor] = useState<{ methods: string[] } | null>(null);
   const [totp, setTotp] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const needTotp = !!twoFactor?.methods.includes("totp");
+  const canPasskey = !!twoFactor?.methods.includes("webauthn");
 
   function generate() {
     setIdentifier(newAccountId());
@@ -81,7 +87,8 @@ function AuthScreen(props: {
   function switchMode(next: "register" | "login") {
     setMode(next);
     setError(null);
-    setNeedTotp(false);
+    setTwoFactor(null);
+    setTotp("");
   }
 
   async function submit(e: React.FormEvent) {
@@ -112,9 +119,27 @@ function AuthScreen(props: {
       }
     } catch (err) {
       if (err instanceof TwoFactorRequiredError) {
-        setNeedTotp(true);
+        setTwoFactor({ methods: err.methods });
         return;
       }
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Completes a passkey sign-in. Separate from the form submit because it runs the
+  // WebAuthn ceremony (a device prompt) rather than verifying a typed code.
+  async function usePasskey() {
+    setError(null);
+    if (!identifier.trim() || !password) {
+      setError("Enter your identifier and master password first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      props.onAuthed(await loginWithPasskey(identifier, password));
+    } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
       setBusy(false);
@@ -192,26 +217,41 @@ function AuthScreen(props: {
           </>
         )}
 
-        {mode === "login" && needTotp && (
-          <>
-            <label>Two-factor code</label>
-            <input
-              value={totp}
-              onChange={(e) => setTotp(e.target.value)}
-              placeholder="6-digit code"
-              inputMode="numeric"
-              autoComplete="one-time-code"
-              autoFocus
-            />
-          </>
+        {mode === "login" && twoFactor && (
+          <div className="twofactor">
+            <p className="muted">Finish signing in with your second factor.</p>
+            {canPasskey && (
+              <button type="button" className="ghost full" disabled={busy} onClick={usePasskey}>
+                <Icon name="lock" size={16} />
+                <span>Use a passkey</span>
+              </button>
+            )}
+            {canPasskey && needTotp && <div className="or-divider">or</div>}
+            {needTotp && (
+              <>
+                <label>Two-factor code</label>
+                <input
+                  value={totp}
+                  onChange={(e) => setTotp(e.target.value)}
+                  placeholder="6-digit code"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  autoFocus
+                />
+              </>
+            )}
+          </div>
         )}
 
         {error && <div className="error">{error}</div>}
 
-        <button className="primary" disabled={busy} type="submit">
-          {busy && <span className="spinner" />}
-          <span>{submitLabel}</span>
-        </button>
+        {/* Hide the form submit when the only way to finish is a passkey (its own button). */}
+        {(mode === "register" || !twoFactor || needTotp) && (
+          <button className="primary" disabled={busy} type="submit">
+            {busy && <span className="spinner" />}
+            <span>{submitLabel}</span>
+          </button>
+        )}
 
         <p className="fineprint">
           Your master password and identifier never leave this device in plaintext. There is no

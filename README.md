@@ -30,24 +30,72 @@ passwd/
 └── docs/               ARCHITECTURE.md, CRYPTO.md, ROADMAP.md
 ```
 
-## Quick start
+## Prerequisites
 
-Run the backend and the web vault together (two terminals):
+- **Go** 1.22.x (the backend pins this toolchain; newer is fine for building)
+- **Node** 20+ and **npm** 10+ (the `clients/` and `site/` workspaces)
+
+Verify:
 
 ```bash
-# 1) backend API on :8080
-cd backend
-PASSWD_DB=memory go run ./cmd/server      # or omit PASSWD_DB for a SQLite file
+go version     # go1.22.x
+node --version # v20+ (or newer)
+```
 
-# 2) web vault on http://localhost:5173 (proxies /api -> :8080)
+## Run it locally
+
+Install the JS dependencies once (covers every client workspace — web vault,
+extension, and the shared crypto/api-client packages):
+
+```bash
 cd clients
 npm install
+```
+
+Then run the two core processes in **two terminals** from the repo root:
+
+```bash
+# Terminal 1 — backend API on http://localhost:8080
+cd backend
+PASSWD_DB=memory go run ./cmd/server     # in-memory (wiped on restart)
+# Persist instead: omit PASSWD_DB (defaults to a SQLite file at backend/data/passwd.db)
+```
+
+```bash
+# Terminal 2 — web vault on http://localhost:5173 (proxies /api -> :8080)
+cd clients
 npm -w @passwd/web run dev
 ```
 
-Then open <http://localhost:5173>, click the **dice** in the identifier box to roll
-a private passphrase, set a master password, and create your account. Everything is
+Open <http://localhost:5173>, click the **dice** in the identifier box to roll a
+private passphrase, set a master password, and create your account. Everything is
 encrypted in the browser; the server only ever stores ciphertext.
+
+> The web vault expects the backend on `:8080`. To point it elsewhere, start it
+> with `VITE_API_BASE=http://localhost:PORT npm -w @passwd/web run dev` (and make
+> sure that origin is in the backend's `PASSWD_ALLOWED_ORIGINS`).
+
+### Two-factor: TOTP and passkeys
+
+With the vault open, use the sidebar:
+
+- **Two-factor (2FA)** — enroll a TOTP authenticator app; sign-in then asks for a code.
+- **Passkeys** — register a passkey (Touch ID / Windows Hello / a security key) as a
+  phishing-resistant second factor. Both can be enabled at once; at sign-in you pick
+  which to use.
+
+Passkeys work out of the box locally because the backend defaults to relying-party
+ID `localhost` with origin `http://localhost:5173`. No physical authenticator? In
+Chrome open **DevTools → ⋮ → More tools → WebAuthn** and enable a **virtual
+authenticator**, then enroll/sign in as normal.
+
+### Marketing / download site (optional)
+
+```bash
+cd site
+npm install
+npm run dev          # http://localhost:4321
+```
 
 ### Browser extension (Chrome & Firefox)
 
@@ -76,8 +124,8 @@ cd backend  && go test ./...                 # Go: crypto vectors + API integrat
 cd clients  && npm -w @passwd/crypto run test # TS: crypto + shared vectors
 ```
 
-Two-factor (TOTP) can be enabled from the vault's **2FA** button; logins then
-prompt for a code.
+Second factors (TOTP codes and/or passkeys) are managed from the vault sidebar; see
+[Two-factor: TOTP and passkeys](#two-factor-totp-and-passkeys) above.
 
 ### Troubleshooting
 

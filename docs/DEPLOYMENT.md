@@ -16,6 +16,16 @@ dev defaults:
 | `PASSWD_DB` | persistent path, e.g. `/var/lib/passwd/passwd.db` |
 | `PASSWD_ALLOWED_ORIGINS` | your web-vault origin, e.g. `https://vault.example.com` |
 | `PASSWD_ADDR` | listen address |
+| `PASSWD_WEBAUTHN_RP_ID` | passkey Relying Party ID: web-vault host only, e.g. `vault.example.com` — set once, keep **stable** (passkeys bind to it) |
+| `PASSWD_WEBAUTHN_RP_NAME` | name authenticators show at enrollment (default `passwd`) |
+| `PASSWD_WEBAUTHN_RP_ORIGINS` | fully-qualified passkey ceremony origins, e.g. `https://vault.example.com` (defaults to `PASSWD_ALLOWED_ORIGINS`) |
+
+Passkeys are a **second factor** alongside TOTP, never passwordless. The RP ID must
+be the registrable domain the web vault is served from; a passkey enrolled there
+cannot be used from the browser extension's `chrome-extension://` origin, so the
+extension uses TOTP (or links out to the vault) — see the web-vault section. If the
+RP config is invalid the server still boots with passkeys disabled (TOTP and
+password login are unaffected).
 
 Terminate TLS in front of it (reverse proxy / load balancer). Build a static
 binary: `cd backend && go build -o passwd-server ./cmd/server` (pure-Go SQLite, no

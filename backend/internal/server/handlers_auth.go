@@ -121,16 +121,32 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		var ok bool
 		ok, err = auth.VerifyVerifier(u.MasterPasswordVerifier, req.MasterPasswordHash)
 		if err == nil && ok {
-			// Password correct — enforce the second factor if enrolled.
-			if u.TOTPEnabled {
+			// Password correct — enforce the second factor if enrolled. TOTP and
+			// passkeys may coexist; the client picks one. TOTP completes inline (the
+			// client retries this call with a code); passkeys complete via the
+			// /api/auth/webauthn/{begin,finish} endpoints.
+			hasPasskey := false
+			if n, cerr := s.store.CountWebAuthnCredentials(r.Context(), u.ID); cerr == nil {
+				hasPasskey = n > 0
+			}
+			if u.TOTPEnabled || hasPasskey {
 				if req.TOTPCode == "" {
+					methods := make([]string, 0, 2)
+					if hasPasskey {
+						methods = append(methods, "webauthn")
+					}
+					if u.TOTPEnabled {
+						methods = append(methods, "totp")
+					}
 					writeJSON(w, http.StatusUnauthorized, map[string]any{
 						"error":             "two-factor authentication required",
 						"twoFactorRequired": true,
+						"methods":           methods,
 					})
 					return
 				}
-				if !auth.VerifyTOTP(u.TOTPSecret, req.TOTPCode) {
+				// A code was supplied: complete the TOTP path.
+				if !u.TOTPEnabled || !auth.VerifyTOTP(u.TOTPSecret, req.TOTPCode) {
 					s.lockout.recordFailure(idHash)
 					writeError(w, http.StatusUnauthorized, "invalid credentials")
 					return

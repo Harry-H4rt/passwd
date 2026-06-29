@@ -63,7 +63,11 @@ runnable and tested. **Security review gates ship before real user data.**
 ## Phase 5 — Hardening & 2FA (in progress)
 
 - [x] TOTP 2FA (enroll/verify), with web vault enable/disable + login prompt
-- [ ] WebAuthn/passkeys
+- [x] WebAuthn/passkeys as a second factor (coexists with TOTP; login advertises
+      available methods). Backend uses go-webauthn (pinned to the last Go 1.22
+      release). Passkey *login* is web-vault-only: a passkey bound to the vault RP
+      ID can't be asserted from the extension's `chrome-extension://` origin, so the
+      extension uses TOTP. PRF-based passwordless unlock is still future work.
 - [x] CSP, security headers (HSTS in prod), CORS allowlist; non-default secrets
       enforced in production
 - [x] Idle auto-lock (web vault + extension)

@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 	created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens(user_id);
+CREATE TABLE IF NOT EXISTS webauthn_credentials (
+	id               TEXT PRIMARY KEY,
+	user_id          TEXT NOT NULL,
+	credential_id    BLOB NOT NULL UNIQUE,
+	public_key       BLOB NOT NULL,
+	attestation_type TEXT NOT NULL DEFAULT '',
+	transports       TEXT NOT NULL DEFAULT '',
+	aaguid           BLOB,
+	sign_count       INTEGER NOT NULL DEFAULT 0,
+	name             TEXT NOT NULL DEFAULT '',
+	created_at       INTEGER NOT NULL,
+	updated_at       INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
 `
 
 // OpenSQLite opens (and migrates) the database at path. Pragmas enable WAL and a
@@ -150,6 +164,67 @@ func boolToInt(b bool) int {
 		return 1
 	}
 	return 0
+}
+
+func (s *SQLite) CreateWebAuthnCredential(ctx context.Context, c WebAuthnCredential) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO webauthn_credentials
+			(id, user_id, credential_id, public_key, attestation_type, transports, aaguid, sign_count, name, created_at, updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+		c.ID, c.UserID, c.CredentialID, c.PublicKey, c.AttestationType, c.Transports,
+		c.AAGUID, c.SignCount, c.Name, unix(c.CreatedAt), unix(c.UpdatedAt))
+	if isUnique(err) {
+		return ErrConflict
+	}
+	return err
+}
+
+func (s *SQLite) ListWebAuthnCredentials(ctx context.Context, userID string) ([]WebAuthnCredential, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, user_id, credential_id, public_key, attestation_type, transports, aaguid, sign_count, name, created_at, updated_at
+		 FROM webauthn_credentials WHERE user_id = ? ORDER BY created_at`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]WebAuthnCredential, 0)
+	for rows.Next() {
+		var c WebAuthnCredential
+		var created, updated int64
+		if err := rows.Scan(&c.ID, &c.UserID, &c.CredentialID, &c.PublicKey, &c.AttestationType,
+			&c.Transports, &c.AAGUID, &c.SignCount, &c.Name, &created, &updated); err != nil {
+			return nil, err
+		}
+		c.CreatedAt, c.UpdatedAt = fromUnix(created), fromUnix(updated)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLite) CountWebAuthnCredentials(ctx context.Context, userID string) (int, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM webauthn_credentials WHERE user_id = ?`, userID).Scan(&n)
+	return n, err
+}
+
+func (s *SQLite) UpdateWebAuthnSignCount(ctx context.Context, credentialID []byte, signCount uint32) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE webauthn_credentials SET sign_count = ?, updated_at = ? WHERE credential_id = ?`,
+		signCount, unix(time.Now()), credentialID)
+	if err != nil {
+		return err
+	}
+	return notFoundIfNoRows(res)
+}
+
+func (s *SQLite) DeleteWebAuthnCredential(ctx context.Context, userID, id string) error {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM webauthn_credentials WHERE id = ? AND user_id = ?`, id, userID)
+	if err != nil {
+		return err
+	}
+	return notFoundIfNoRows(res)
 }
 
 func (s *SQLite) CreateCipher(ctx context.Context, c Cipher) error {

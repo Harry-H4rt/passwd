@@ -28,3 +28,5 @@ dist/
 *.sqlite
 *.db
 /data/
+# Local vault files (never commit a vault, even an encrypted test one)
+*.passwd

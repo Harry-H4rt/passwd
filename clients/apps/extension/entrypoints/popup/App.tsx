@@ -89,14 +89,25 @@ function Unlock(props: { onUnlocked: () => void }) {
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [twoFactor, setTwoFactor] = useState<{ methods: string[] } | null>(null);
+  const [totp, setTotp] = useState("");
+
+  const needTotp = !!twoFactor?.methods.includes("totp");
+  const passkeyOnly = !!twoFactor && twoFactor.methods.includes("webauthn") && !needTotp;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setBusy(true);
     try {
-      const res = await sendBackground<UnlockResponse>({ type: "unlock", identifier, masterPassword: password });
+      const res = await sendBackground<UnlockResponse>({
+        type: "unlock",
+        identifier,
+        masterPassword: password,
+        totpCode: needTotp ? totp : undefined,
+      });
       if (res.ok) props.onUnlocked();
+      else if (res.twoFactorRequired) setTwoFactor({ methods: res.methods ?? [] });
       else setError(res.error || "Unlock failed.");
     } catch {
       setError("Unlock failed.");
@@ -132,13 +143,34 @@ function Unlock(props: { onUnlocked: () => void }) {
             {showPw ? "Hide" : "Show"}
           </button>
         </div>
+        {needTotp && (
+          <input
+            placeholder="6-digit code"
+            value={totp}
+            onChange={(e) => setTotp(e.target.value)}
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            autoFocus
+          />
+        )}
+        {/* A passkey can't be asserted from the extension's origin, so send the user
+            to the web vault to finish a passkey-only sign-in. */}
+        {twoFactor && twoFactor.methods.includes("webauthn") && (
+          <a className="link" href={WEB_VAULT_URL} target="_blank" rel="noreferrer">
+            Use a passkey? Sign in at the web vault
+          </a>
+        )}
         {error && <div className="error">{error}</div>}
-        <button className="primary" disabled={busy} type="submit">
-          {busy ? "Unlocking..." : "Unlock"}
-        </button>
-        <a className="link" href={WEB_VAULT_URL} target="_blank" rel="noreferrer">
-          No account? Create one in the web vault
-        </a>
+        {!passkeyOnly && (
+          <button className="primary" disabled={busy} type="submit">
+            {busy ? "Unlocking..." : needTotp ? "Verify & unlock" : "Unlock"}
+          </button>
+        )}
+        {!twoFactor && (
+          <a className="link" href={WEB_VAULT_URL} target="_blank" rel="noreferrer">
+            No account? Create one in the web vault
+          </a>
+        )}
       </form>
     </Shell>
   );

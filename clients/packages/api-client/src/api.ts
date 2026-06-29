@@ -6,6 +6,12 @@
 // backend host (which it lists in host_permissions).
 
 import type { KdfParams } from "@passwd/crypto";
+import type {
+  PublicKeyCredentialCreationOptionsJSON,
+  PublicKeyCredentialRequestOptionsJSON,
+  RegistrationResponseJSON,
+  AuthenticationResponseJSON,
+} from "@simplewebauthn/browser";
 
 export type Kdf = KdfParams;
 
@@ -61,7 +67,11 @@ export const register = (bundle: RegistrationBundle) =>
 
 // Login can succeed, or report that a second factor is required. We don't use
 // call() here because the "2FA required" case is a 401 we want to handle, not throw.
-export type LoginOutcome = (LoginResult & { twoFactorRequired?: false }) | { twoFactorRequired: true };
+// `methods` lists the enrolled factors ("webauthn", "totp") so the UI can offer a
+// choice.
+export type LoginOutcome =
+  | (LoginResult & { twoFactorRequired?: false })
+  | { twoFactorRequired: true; methods: string[] };
 
 export async function login(
   identifier: string,
@@ -75,7 +85,9 @@ export async function login(
   });
   const json = await res.json().catch(() => ({}));
   if (res.ok) return json as LoginResult;
-  if (res.status === 401 && json.twoFactorRequired) return { twoFactorRequired: true };
+  if (res.status === 401 && json.twoFactorRequired) {
+    return { twoFactorRequired: true, methods: json.methods ?? [] };
+  }
   throw new Error(json.error || `login failed (${res.status})`);
 }
 
@@ -90,6 +102,49 @@ export const twoFactorEnable = (token: string, code: string) =>
 
 export const twoFactorDisable = (token: string, code: string) =>
   call<{ enabled: boolean }>("POST", "/api/2fa/disable", { code }, token);
+
+// --- passkeys (WebAuthn) ----------------------------------------------------
+// The server returns/accepts standard WebAuthn JSON; the browser ceremony
+// (navigator.credentials) lives in session.ts via @simplewebauthn/browser.
+
+export interface WebAuthnCredentialSummary {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+export const webauthnCredentials = (token: string) =>
+  call<{ credentials: WebAuthnCredentialSummary[] }>(
+    "GET", "/api/2fa/webauthn/credentials", undefined, token);
+
+export const webauthnDeleteCredential = (token: string, id: string) =>
+  call<{ deleted: boolean }>("DELETE", `/api/2fa/webauthn/credentials/${id}`, undefined, token);
+
+export const webauthnRegisterBegin = (token: string) =>
+  call<{ sessionId: string; options: { publicKey: PublicKeyCredentialCreationOptionsJSON } }>(
+    "POST", "/api/2fa/webauthn/register/begin", {}, token);
+
+export const webauthnRegisterFinish = (
+  token: string,
+  sessionId: string,
+  name: string,
+  credential: RegistrationResponseJSON,
+) =>
+  call<{ id: string; name: string }>(
+    "POST", "/api/2fa/webauthn/register/finish", { sessionId, name, credential }, token);
+
+export const webauthnLoginBegin = (identifier: string, masterPasswordHash: string) =>
+  call<{ sessionId: string; options: { publicKey: PublicKeyCredentialRequestOptionsJSON } }>(
+    "POST", "/api/auth/webauthn/begin", { identifier, masterPasswordHash });
+
+export const webauthnLoginFinish = (
+  identifier: string,
+  masterPasswordHash: string,
+  sessionId: string,
+  credential: AuthenticationResponseJSON,
+) =>
+  call<LoginResult>(
+    "POST", "/api/auth/webauthn/finish", { identifier, masterPasswordHash, sessionId, credential });
 
 export const sync = (token: string) =>
   call<{ ciphers: CipherDto[] }>("GET", "/api/sync", undefined, token);

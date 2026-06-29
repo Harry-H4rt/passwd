@@ -113,6 +113,10 @@ npm -w @passwd/extension run build:firefox  # Firefox -> apps/extension/.output/
 (Or `npm -w @passwd/extension run dev:firefox`, which auto-launches Firefox with
 live reload.)
 
+With the backend running, click the extension icon, unlock with your identifier +
+master password, and your vault appears. The popup supports quick-access view/copy,
+autofill, add/edit/delete, and a save-on-submit prompt when you log into a site.
+
 ### Desktop app (standalone, offline)
 
 A separate KeePass-style app: **no backend, no network**. The vault is a single
@@ -120,31 +124,56 @@ portable encrypted `.passwd` file you can keep anywhere — including a USB stic
 and the master password decrypts it directly. (This is distinct from the web vault
 + extension, which sync through the Go backend.)
 
-Prerequisites: the **Rust** toolchain (<https://rustup.rs>) and, on Debian/Ubuntu,
-the Tauri system libraries:
+> There are no prebuilt downloads yet — signed cross-platform installers are a
+> planned step (see [`docs/ROADMAP.md`](docs/ROADMAP.md)). For now you build the
+> app once with the steps below; the build produces the installable artifacts.
+
+**1. Install the build prerequisites.** You need [Node](https://nodejs.org) 20+,
+the **Rust** toolchain, and (on Debian/Ubuntu) the Tauri system libraries:
 
 ```bash
+# Rust toolchain (https://rustup.rs)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Linux (Debian/Ubuntu) system libraries for the webview
 sudo apt update && sudo apt install libwebkit2gtk-4.1-dev build-essential \
   curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 ```
 
-Then, from `clients/`:
+**2. Build the app** from the `clients/` directory:
 
 ```bash
+cd clients
 npm install
-npm -w @passwd/desktop run tauri dev     # run in a dev window
-npm -w @passwd/desktop run tauri build   # bundle installers
+npm -w @passwd/desktop run tauri build
 ```
 
-`tauri build` outputs to `apps/desktop/src-tauri/target/release/bundle/`:
-an **AppImage** (`appimage/passwd_*.AppImage`, runs portably — copy it to a USB
-stick and launch) and a **.deb** (`deb/passwd_*.deb`). On first launch choose
-**New vault…** to create a `.passwd` file, or **Open vault…** for an existing one.
-There is no account and no password reset.
+**3. Install or run the result.** The build writes to
+`clients/apps/desktop/src-tauri/target/release/bundle/`:
 
-With the backend running, click the extension icon, unlock with your identifier +
-master password, and your vault appears. The popup supports quick-access view/copy,
-autofill, add/edit/delete, and a save-on-submit prompt when you log into a site.
+```bash
+# Option A — portable AppImage (no install; great for a USB stick)
+chmod +x apps/desktop/src-tauri/target/release/bundle/appimage/passwd_*.AppImage
+./apps/desktop/src-tauri/target/release/bundle/appimage/passwd_*.AppImage
+
+# Option B — install system-wide via the .deb (adds it to your app menu)
+sudo apt install ./apps/desktop/src-tauri/target/release/bundle/deb/passwd_*.deb
+```
+
+To carry it on a **USB stick**, copy the `.AppImage` onto the drive and double-click
+it on any Linux machine — keep your `.passwd` vault file next to it and both travel
+together.
+
+**Using it:** on first launch choose **New vault…** to create a `.passwd` file (set
+a master password), or **Open vault…** for an existing one. Add/edit/copy entries,
+generate passwords, and change the master password from the toolbar. The app
+auto-locks when idle. **There is no account and no password reset** — if you lose
+the master password the vault cannot be opened, so keep a backup copy of the file.
+
+**Develop it** (hot-reload window instead of a full build):
+
+```bash
+cd clients && npm -w @passwd/desktop run tauri dev
+```
 
 ### Tests
 

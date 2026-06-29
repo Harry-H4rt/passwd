@@ -82,8 +82,12 @@ runnable and tested. **Security review gates ship before real user data.**
       Proton-like design system (`site/src/styles/global.css`)
 - [x] Web-vault redesign to match the new design language (orange accent, SVG
       icons, light/dark theme toggle mirroring the site)
-- [ ] Desktop app (Tauri) wrapping the web vault → real installers for the
-      site's Download button
+- [~] Desktop app (Tauri v2): shipped as a **standalone, offline, KeePass-style
+      vault** rather than a sync-client wrapper — no backend, no network; the vault
+      is a single portable encrypted file (`clients/apps/desktop`, reusing
+      `@passwd/crypto`). Linux AppImage + .deb build and run portably (e.g. from a
+      USB stick). Remaining: cross-platform **signed** installers (mac notarization,
+      Windows signing) + wiring the site's Download button.
 - [ ] Extension store submissions (Chrome Web Store, AMO)
 - [x] Self-host docs + Docker (backend Dockerfile + docker-compose); signed
       release binaries still TODO

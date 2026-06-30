@@ -98,7 +98,15 @@ jobs:
           projectPath: clients/apps/desktop
           tagName: v__VERSION__
           releaseName: "passwd v__VERSION__"
-          releaseBody: "Standalone offline desktop vault. See the assets below for your platform."
+          releaseBody: |
+            Standalone, offline desktop vault (Tauri). Download the asset for your platform:
+            - **Linux:** `.AppImage` (portable) or `.deb`
+            - **macOS:** `.dmg` (Apple silicon and Intel builds)
+            - **Windows:** `.msi` or the NSIS `-setup.exe`
+
+            Builds are currently **unsigned**, so macOS Gatekeeper and Windows
+            SmartScreen will warn on first launch. See the CHANGELOG and docs for
+            details. Pre-audit: do not store irreplaceable secrets yet.
           releaseDraft: true
           prerelease: true
           args: ${{ matrix.args }}

@@ -11,6 +11,8 @@ import {
   encryptItem,
   decryptItem,
   generateAccountId,
+  enrollRecovery,
+  completeRecovery,
   DEFAULT_KDF,
 } from "@passwd/crypto";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
@@ -104,6 +106,48 @@ export async function setupTwoFactor(s: Session): Promise<{ secret: string; otpa
 
 export const enableTwoFactor = (s: Session, code: string) => api.twoFactorEnable(s.accessToken, code);
 export const disableTwoFactor = (s: Session, code: string) => api.twoFactorDisable(s.accessToken, code);
+
+// --- account recovery -------------------------------------------------------
+
+export const getRecoveryStatus = (s: Session) => api.recoveryStatus(s.accessToken);
+
+// Generate a recovery code, wrap the (unlocked) User Key under it, and upload the
+// wrapped key + verifier. Returns the recovery code to show the user exactly once
+// — it is never stored and cannot be recovered if lost.
+export async function enableRecovery(s: Session): Promise<string> {
+  const { recoveryCode, recoveryProtectedUserKey, recoveryAuthHash } = await enrollRecovery(s.userKey);
+  await api.recoveryEnable(s.accessToken, recoveryProtectedUserKey, recoveryAuthHash);
+  return recoveryCode;
+}
+
+export const disableRecovery = (s: Session) => api.recoveryDisable(s.accessToken);
+
+// Forgot-password recovery: fetch the recovery-wrapped key, unwrap it with the
+// recovery code, set a NEW master password, and log in. The User Key is unchanged,
+// so existing vault items remain decryptable. A wrong code (or unknown account)
+// fails when the recovery-wrapped key won't decrypt.
+export async function recoverAccount(
+  identifier: string,
+  recoveryCode: string,
+  newMasterPassword: string,
+): Promise<Session> {
+  const { recoveryProtectedUserKey, kdf } = await api.recoveryChallenge(identifier);
+  const reset = await completeRecovery(
+    recoveryCode,
+    recoveryProtectedUserKey,
+    identifier,
+    newMasterPassword,
+    kdf,
+  );
+  const res = await api.recoveryComplete({
+    identifier,
+    recoveryAuthHash: reset.recoveryAuthHash,
+    masterPasswordHash: reset.masterPasswordHash,
+    protectedUserKey: reset.protectedUserKey,
+    kdf: reset.kdf,
+  });
+  return { identifier, accessToken: res.accessToken, refreshToken: res.refreshToken, userKey: reset.userKey };
+}
 
 // --- passkeys (WebAuthn) ----------------------------------------------------
 

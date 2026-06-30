@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS users (
 	protected_user_key TEXT NOT NULL,
 	totp_secret        TEXT NOT NULL DEFAULT '',
 	totp_enabled       INTEGER NOT NULL DEFAULT 0,
+	recovery_protected_user_key TEXT NOT NULL DEFAULT '',
+	recovery_verifier  TEXT NOT NULL DEFAULT '',
 	created_at         INTEGER NOT NULL,
 	updated_at         INTEGER NOT NULL
 );
@@ -82,6 +84,8 @@ func OpenSQLite(path string) (*SQLite, error) {
 	for _, stmt := range []string{
 		`ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN recovery_protected_user_key TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN recovery_verifier TEXT NOT NULL DEFAULT ''`,
 	} {
 		if _, err := db.ExecContext(context.Background(), stmt); err != nil &&
 			!strings.Contains(err.Error(), "duplicate column name") {
@@ -106,11 +110,13 @@ func fromUnix(n int64) time.Time { return time.Unix(n, 0).UTC() }
 func (s *SQLite) CreateUser(ctx context.Context, u User) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO users (id, identifier_hash, kdf_type, kdf_iterations, kdf_memory_mib,
-			kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled, created_at, updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+			kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled,
+			recovery_protected_user_key, recovery_verifier, created_at, updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		u.ID, u.IdentifierHash, u.KDF.Type, u.KDF.Iterations, u.KDF.MemoryMiB,
 		u.KDF.Parallelism, u.MasterPasswordVerifier, u.ProtectedUserKey,
-		u.TOTPSecret, boolToInt(u.TOTPEnabled), unix(u.CreatedAt), unix(u.UpdatedAt))
+		u.TOTPSecret, boolToInt(u.TOTPEnabled),
+		u.RecoveryProtectedUserKey, u.RecoveryVerifier, unix(u.CreatedAt), unix(u.UpdatedAt))
 	if isUnique(err) {
 		return ErrConflict
 	}
@@ -123,7 +129,8 @@ func (s *SQLite) scanUser(row *sql.Row) (User, error) {
 	var totpEnabled int
 	err := row.Scan(&u.ID, &u.IdentifierHash, &u.KDF.Type, &u.KDF.Iterations,
 		&u.KDF.MemoryMiB, &u.KDF.Parallelism, &u.MasterPasswordVerifier,
-		&u.ProtectedUserKey, &u.TOTPSecret, &totpEnabled, &created, &updated)
+		&u.ProtectedUserKey, &u.TOTPSecret, &totpEnabled,
+		&u.RecoveryProtectedUserKey, &u.RecoveryVerifier, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -137,7 +144,7 @@ func (s *SQLite) scanUser(row *sql.Row) (User, error) {
 
 const userCols = `id, identifier_hash, kdf_type, kdf_iterations, kdf_memory_mib,
 	kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled,
-	created_at, updated_at`
+	recovery_protected_user_key, recovery_verifier, created_at, updated_at`
 
 func (s *SQLite) GetUserByIdentifierHash(ctx context.Context, identifierHash string) (User, error) {
 	return s.scanUser(s.db.QueryRowContext(ctx,
@@ -153,6 +160,33 @@ func (s *SQLite) SetUserTOTP(ctx context.Context, userID, secret string, enabled
 	res, err := s.db.ExecContext(ctx,
 		`UPDATE users SET totp_secret = ?, totp_enabled = ? WHERE id = ?`,
 		secret, boolToInt(enabled), userID)
+	if err != nil {
+		return err
+	}
+	return notFoundIfNoRows(res)
+}
+
+func (s *SQLite) SetUserRecovery(ctx context.Context, userID, recoveryProtectedUserKey, recoveryVerifier string) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE users SET recovery_protected_user_key = ?, recovery_verifier = ?, updated_at = ? WHERE id = ?`,
+		recoveryProtectedUserKey, recoveryVerifier, unix(time.Now()), userID)
+	if err != nil {
+		return err
+	}
+	return notFoundIfNoRows(res)
+}
+
+func (s *SQLite) ClearUserRecovery(ctx context.Context, userID string) error {
+	return s.SetUserRecovery(ctx, userID, "", "")
+}
+
+func (s *SQLite) RotateMasterPassword(ctx context.Context, userID, verifier, protectedUserKey string, kdf KDFParams) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE users SET verifier = ?, protected_user_key = ?,
+			kdf_type = ?, kdf_iterations = ?, kdf_memory_mib = ?, kdf_parallelism = ?, updated_at = ?
+		 WHERE id = ?`,
+		verifier, protectedUserKey, kdf.Type, kdf.Iterations, kdf.MemoryMiB, kdf.Parallelism,
+		unix(time.Now()), userID)
 	if err != nil {
 		return err
 	}

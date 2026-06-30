@@ -71,11 +71,21 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /api/auth/login", s.rateLimit(http.HandlerFunc(s.handleLogin)))
 	mux.Handle("POST /api/auth/refresh", s.rateLimit(http.HandlerFunc(s.handleRefresh)))
 
+	// Account recovery — no access token (the master password is forgotten), so
+	// these are rate limited and protected by the same per-account lockout as login.
+	mux.Handle("POST /api/auth/recovery/challenge", s.rateLimit(http.HandlerFunc(s.handleRecoveryChallenge)))
+	mux.Handle("POST /api/auth/recovery/complete", s.rateLimit(http.HandlerFunc(s.handleRecoveryComplete)))
+
 	// Two-factor (TOTP) — requires a valid access token.
 	mux.Handle("GET /api/2fa", s.requireAuth(http.HandlerFunc(s.handleTOTPStatus)))
 	mux.Handle("POST /api/2fa/setup", s.requireAuth(http.HandlerFunc(s.handleTOTPSetup)))
 	mux.Handle("POST /api/2fa/enable", s.requireAuth(http.HandlerFunc(s.handleTOTPEnable)))
 	mux.Handle("POST /api/2fa/disable", s.requireAuth(http.HandlerFunc(s.handleTOTPDisable)))
+
+	// Recovery code enrollment — requires a valid access token (set up while unlocked).
+	mux.Handle("GET /api/recovery", s.requireAuth(http.HandlerFunc(s.handleRecoveryStatus)))
+	mux.Handle("POST /api/recovery/enable", s.requireAuth(http.HandlerFunc(s.handleRecoveryEnable)))
+	mux.Handle("POST /api/recovery/disable", s.requireAuth(http.HandlerFunc(s.handleRecoveryDisable)))
 
 	// Passkey (WebAuthn) enrollment — requires a valid access token.
 	mux.Handle("GET /api/2fa/webauthn/credentials", s.requireAuth(http.HandlerFunc(s.handleWebAuthnList)))

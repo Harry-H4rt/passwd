@@ -38,6 +38,14 @@ type User struct {
 	MasterPasswordVerifier string
 	// ProtectedUserKey is the User Key wrapped by the stretched master key (EncString).
 	ProtectedUserKey string
+	// RecoveryProtectedUserKey is the same User Key independently wrapped by a key
+	// derived from the user's recovery code (EncString). Empty until the user opts
+	// in. Lets a user who forgot the master password recover without a server reset.
+	RecoveryProtectedUserKey string
+	// RecoveryVerifier = Argon2id(recoveryAuthHash, randomSalt), PHC-encoded — the
+	// server-side proof-of-possession for the recovery code. Empty until enrolled.
+	// Like the master-password verifier, the server never sees the code itself.
+	RecoveryVerifier string
 	// TOTPSecret is a server-held second-factor secret (base32). 2FA requires the
 	// server to verify codes, so unlike vault data this is not zero-knowledge — it
 	// is an auth factor, never vault content. Empty until enrolled.
@@ -93,6 +101,15 @@ type Store interface {
 	GetUserByIdentifierHash(ctx context.Context, identifierHash string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	SetUserTOTP(ctx context.Context, userID, secret string, enabled bool) error
+
+	// SetUserRecovery stores (or replaces) the recovery-wrapped User Key and the
+	// recovery verifier. ClearUserRecovery removes both (recovery disabled).
+	SetUserRecovery(ctx context.Context, userID, recoveryProtectedUserKey, recoveryVerifier string) error
+	ClearUserRecovery(ctx context.Context, userID string) error
+	// RotateMasterPassword swaps in a new master-password verifier, the re-wrapped
+	// protected User Key, and KDF params. Used by the recovery flow (and a future
+	// change-password flow). The recovery-wrapped key is untouched.
+	RotateMasterPassword(ctx context.Context, userID, verifier, protectedUserKey string, kdf KDFParams) error
 
 	CreateWebAuthnCredential(ctx context.Context, c WebAuthnCredential) error
 	ListWebAuthnCredentials(ctx context.Context, userID string) ([]WebAuthnCredential, error)

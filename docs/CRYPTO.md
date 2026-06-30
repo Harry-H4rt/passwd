@@ -139,9 +139,54 @@ rate-limit/lockout state is ephemeral and in-memory.
 | (nothing) | Learn the plaintext identifier / who its users are |
 | (nothing) | See even the *type* of a stored item |
 
-**Consequence:** a forgotten master password = unrecoverable vault. The UX must
-make this explicit and offer an (optional, user-controlled) Emergency Access /
-recovery-code mechanism, never a server-side reset.
+**Consequence:** a forgotten master password = unrecoverable vault *unless* the
+user opted into a recovery code (below). There is never a server-side reset.
+
+## Account recovery (recovery code)
+
+A **recovery code** is an optional, user-controlled way back into the vault after
+a forgotten master password. It never lets the server reset anything.
+
+It is a 24-word BIP39 phrase generated on the device (≈264 bits). It does **not**
+re-encrypt the vault: instead it independently wraps the *same* User Key, so
+recovery leaves every stored cipher valid.
+
+```
+recovery code (24 words, shown once)
+        │  PBKDF2(normalize(phrase), "passwd.recovery.salt.v1")
+        ▼
+  recovery base key
+        │
+   ┌────┴───────────────┐
+   ▼                     ▼
+HKDF "recovery-enc"   HKDF "recovery-auth"
+   │                     │
+   ▼                     ▼
+recoveryEncKey       recoveryAuthHash ── server stores Argon2id(this) as a verifier
+   │
+   │ AES-GCM-wrap the User Key
+   ▼
+Recovery-Protected User Key ── uploaded
+```
+
+- **Enroll** (while unlocked): wrap the in-memory User Key with `recoveryEncKey`
+  and upload `{ recoveryProtectedUserKey, recoveryAuthHash }`. The server stores
+  the wrapped key and `Argon2id(recoveryAuthHash)` — never the phrase or the code.
+- **Recover:** the client fetches the recovery-wrapped key (`/api/auth/recovery/
+  challenge`), unwraps the User Key with the phrase, the user picks a **new**
+  master password, and the client re-wraps the *same* User Key under it. The
+  server authorizes the swap by verifying `recoveryAuthHash` against the stored
+  verifier (`/api/auth/recovery/complete`), exactly like a login.
+- **No oracle:** the challenge returns a random, correctly-shaped decoy blob for
+  unknown identifiers / accounts without recovery, so it doesn't reveal whether an
+  account exists or has recovery enabled. The complete step shares the per-account
+  lockout with login.
+- **Tradeoff:** the recovery code is an account-level escape hatch that bypasses
+  any TOTP/passkey second factor, so it must be guarded as carefully as the master
+  password. The UI shows it exactly once and warns accordingly.
+
+Delegated **emergency access** (granting a trusted contact time-delayed access via
+per-recipient public-key crypto) is future work, tracked in the roadmap.
 
 ## Threat model (summary)
 
@@ -164,6 +209,7 @@ recovery-code mechanism, never a server-side reset.
 - [x] 2FA: TOTP implemented (server-verified). Note: the TOTP secret is held
       server-side because the server must verify codes — it is an *auth factor*,
       not vault data, and never touches vault contents. WebAuthn/passkeys next.
-- [ ] User-controlled recovery (recovery key / emergency access) — never a
-      server-side reset.
+- [x] User-controlled recovery code (recovery phrase independently wraps the User
+      Key; server verifies a recovery hash to authorize a password reset, never a
+      server-side reset). Delegated emergency access is still future work.
 - [ ] Independent crypto review **before** storing any real user data.

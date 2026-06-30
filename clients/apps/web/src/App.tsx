@@ -4,6 +4,7 @@ import {
   registerAccount,
   loginAccount,
   loginWithPasskey,
+  recoverAccount,
   newAccountId,
   TwoFactorRequiredError,
 } from "@passwd/api-client";
@@ -69,6 +70,10 @@ function AuthScreen(props: {
   const [generated, setGenerated] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  // Forgot-master-password flow: prove possession of the recovery code, then set a
+  // new master password. Lives inside login mode (toggled by a link).
+  const [recover, setRecover] = useState(false);
+  const [recoveryCode, setRecoveryCode] = useState("");
   // Non-null once a first sign-in attempt reports a second factor is required; it
   // holds the enrolled methods so we can offer a passkey, a TOTP code, or both.
   const [twoFactor, setTwoFactor] = useState<{ methods: string[] } | null>(null);
@@ -89,11 +94,36 @@ function AuthScreen(props: {
     setError(null);
     setTwoFactor(null);
     setTotp("");
+    setRecover(false);
+    setRecoveryCode("");
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (recover) {
+      if (!identifier.trim() || !recoveryCode.trim()) {
+        setError("Enter your identifier and recovery code.");
+        return;
+      }
+      if (password.length < 8) {
+        setError("New master password must be at least 8 characters.");
+        return;
+      }
+      if (password !== confirm) {
+        setError("The master passwords don't match.");
+        return;
+      }
+      setBusy(true);
+      try {
+        props.onAuthed(await recoverAccount(identifier, recoveryCode, password));
+      } catch {
+        setError("Recovery failed. Double-check your identifier and recovery code.");
+      } finally {
+        setBusy(false);
+      }
+      return;
+    }
     if (!identifier.trim() || !password) {
       setError("Enter an account identifier and a master password.");
       return;
@@ -147,12 +177,16 @@ function AuthScreen(props: {
   }
 
   const submitLabel = busy
-    ? "Deriving keys"
-    : mode === "register"
-      ? "Create account"
-      : needTotp
-        ? "Verify and unlock"
-        : "Unlock vault";
+    ? recover
+      ? "Recovering"
+      : "Deriving keys"
+    : recover
+      ? "Recover and unlock"
+      : mode === "register"
+        ? "Create account"
+        : needTotp
+          ? "Verify and unlock"
+          : "Unlock vault";
 
   return (
     <div className="center">
@@ -207,14 +241,60 @@ function AuthScreen(props: {
           <p className="hint">Roll the dice for a private passphrase, or type your own email. No email needed.</p>
         )}
 
-        <label>Master password</label>
-        <PasswordField value={password} onChange={setPassword} placeholder="never sent to the server" />
-
-        {mode === "register" && (
+        {recover && (
           <>
-            <label>Confirm master password</label>
+            <label>Recovery code</label>
+            <textarea
+              className="recovery-input"
+              value={recoveryCode}
+              onChange={(e) => setRecoveryCode(e.target.value)}
+              placeholder="your 24-word recovery code"
+              rows={3}
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </>
+        )}
+
+        <label>{recover ? "New master password" : "Master password"}</label>
+        <PasswordField
+          value={password}
+          onChange={setPassword}
+          placeholder={recover ? "choose a new master password" : "never sent to the server"}
+        />
+
+        {(mode === "register" || recover) && (
+          <>
+            <label>Confirm {recover ? "new " : ""}master password</label>
             <PasswordField value={confirm} onChange={setConfirm} placeholder="type it again" />
           </>
+        )}
+
+        {mode === "login" && !twoFactor && !recover && (
+          <button
+            type="button"
+            className="linklike"
+            onClick={() => {
+              setRecover(true);
+              setError(null);
+              setConfirm("");
+            }}
+          >
+            Forgot your master password? Recover with a recovery code
+          </button>
+        )}
+        {recover && (
+          <button
+            type="button"
+            className="linklike"
+            onClick={() => {
+              setRecover(false);
+              setError(null);
+              setRecoveryCode("");
+            }}
+          >
+            Back to sign in
+          </button>
         )}
 
         {mode === "login" && twoFactor && (
@@ -255,7 +335,8 @@ function AuthScreen(props: {
 
         <p className="fineprint">
           Your master password and identifier never leave this device in plaintext. There is no
-          password reset, so if you lose them the vault is unrecoverable.
+          password reset; only a recovery code you set up yourself can get you back in, so keep it
+          and your identifier safe.
         </p>
       </form>
     </div>

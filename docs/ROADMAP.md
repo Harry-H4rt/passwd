@@ -71,7 +71,10 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] CSP, security headers (HSTS in prod), CORS allowlist; non-default secrets
       enforced in production
 - [x] Idle auto-lock (web vault + extension)
-- [ ] Emergency access / recovery codes (user-controlled, never server reset)
+- [x] Recovery code: user-controlled account recovery via a 24-word phrase that
+      independently wraps the User Key (no vault re-encryption, never a server
+      reset). Web vault enroll/disable + a forgot-password flow on sign-in. See
+      docs/CRYPTO.md. Delegated emergency access (trusted contact) is still future.
 - [x] Secrets management for deploy: `*_FILE` support (Docker/K8s secrets) +
       generation/rotation docs in docs/DEPLOYMENT.md
 - [ ] **Independent crypto + app security audit** (gate before real users)

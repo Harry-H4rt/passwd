@@ -74,6 +74,38 @@ func (m *Memory) SetUserTOTP(_ context.Context, userID, secret string, enabled b
 	return nil
 }
 
+func (m *Memory) SetUserRecovery(_ context.Context, userID, recoveryProtectedUserKey, recoveryVerifier string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.RecoveryProtectedUserKey = recoveryProtectedUserKey
+	u.RecoveryVerifier = recoveryVerifier
+	m.users[userID] = u
+	return nil
+}
+
+func (m *Memory) ClearUserRecovery(_ context.Context, userID string) error {
+	return m.SetUserRecovery(context.Background(), userID, "", "")
+}
+
+func (m *Memory) RotateMasterPassword(_ context.Context, userID, verifier, protectedUserKey string, kdf KDFParams) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.MasterPasswordVerifier = verifier
+	u.ProtectedUserKey = protectedUserKey
+	u.KDF = kdf
+	u.UpdatedAt = time.Now().UTC()
+	m.users[userID] = u
+	return nil
+}
+
 func (m *Memory) CreateWebAuthnCredential(_ context.Context, c WebAuthnCredential) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

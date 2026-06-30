@@ -58,6 +58,7 @@ func (s *Server) handleRecoveryEnable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not enable recovery")
 		return
 	}
+	s.audit(r.Context(), userID, evtRecoveryEnable, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -68,6 +69,7 @@ func (s *Server) handleRecoveryDisable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not disable recovery")
 		return
 	}
+	s.audit(r.Context(), userID, evtRecoveryDisable, "")
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -154,6 +156,7 @@ func (s *Server) handleRecoveryComplete(w http.ResponseWriter, r *http.Request) 
 			if derr := s.store.DeleteRefreshTokensForUser(r.Context(), u.ID); derr != nil {
 				s.logger.Error("revoke sessions on recovery", "err", derr)
 			}
+			s.audit(r.Context(), u.ID, evtRecoveryComplete, "")
 			tokens, terr := s.issueTokens(r, u.ID)
 			if terr != nil {
 				s.logger.Error("issue tokens", "err", terr)

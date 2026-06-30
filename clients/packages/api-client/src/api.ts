@@ -176,6 +176,15 @@ export const webauthnLoginFinish = (
   call<LoginResult>(
     "POST", "/api/auth/webauthn/finish", { identifier, masterPasswordHash, sessionId, credential });
 
+export interface AuditEvent {
+  event: string;
+  detail?: string;
+  createdAt: string;
+}
+
+export const auditLog = (token: string) =>
+  call<{ events: AuditEvent[] }>("GET", "/api/audit", undefined, token);
+
 export const sync = (token: string) =>
   call<{ ciphers: CipherDto[] }>("GET", "/api/sync", undefined, token);
 

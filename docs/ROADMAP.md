@@ -31,7 +31,10 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Owner-scoped cipher CRUD + `/api/sync`
 - [x] IP rate limiting + per-account login lockout
 - [x] Integration test (register → login → refresh → CRUD → sync, owner isolation)
-- [ ] Audit log (deferred)
+- [x] Append-only audit log: privacy-preserving security events (logins, failures,
+      2FA/recovery/passkey changes, token-reuse, cipher changes) keyed by the random
+      account id (no identifier, no IP). Users review their own via `GET /api/audit`
+      ("Activity" in the web vault).
 
 ## Phase 3 — Web vault ✅ (MVP)
 
@@ -41,7 +44,7 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Password generator
 - [x] One-time recovery-passphrase display on sign-up
 - [x] Extracted shared `@passwd/api-client` (now used by web + extension)
-- [ ] Auto-lock on idle timeout (only manual lock so far)
+- [x] Auto-lock on idle timeout (web vault + extension; clears the in-memory keys)
 - [x] Import/export: encrypted backup (passphrase) + plaintext JSON/CSV with
       warning; CSV importer maps common managers (Bitwarden/Chrome/generic)
 

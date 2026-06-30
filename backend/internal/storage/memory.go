@@ -16,6 +16,7 @@ type Memory struct {
 	ciphers  map[string]Cipher             // id -> Cipher
 	refresh  map[string]RefreshToken       // token hash -> RefreshToken
 	passkeys map[string]WebAuthnCredential // row id -> credential
+	audit    []AuditEvent                  // append-only, oldest first
 }
 
 func NewMemory() *Memory {
@@ -270,6 +271,26 @@ func (m *Memory) DeleteRefreshTokensForUser(_ context.Context, userID string) er
 		}
 	}
 	return nil
+}
+
+func (m *Memory) AppendAuditEvent(_ context.Context, e AuditEvent) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.audit = append(m.audit, e)
+	return nil
+}
+
+func (m *Memory) ListAuditEvents(_ context.Context, userID string, limit int) ([]AuditEvent, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]AuditEvent, 0, limit)
+	// Walk newest-first and collect up to limit events for the user.
+	for i := len(m.audit) - 1; i >= 0 && len(out) < limit; i-- {
+		if m.audit[i].UserID == userID {
+			out = append(out, m.audit[i])
+		}
+	}
+	return out, nil
 }
 
 func (m *Memory) Close() error { return nil }

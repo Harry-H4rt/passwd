@@ -108,6 +108,9 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /api/auth/webauthn/begin", s.rateLimit(http.HandlerFunc(s.handleWebAuthnLoginBegin)))
 	mux.Handle("POST /api/auth/webauthn/finish", s.rateLimit(http.HandlerFunc(s.handleWebAuthnLoginFinish)))
 
+	// Security audit log — the caller's own recent events.
+	mux.Handle("GET /api/audit", s.requireAuth(http.HandlerFunc(s.handleAuditLog)))
+
 	// Vault sync — requires a valid access token.
 	mux.Handle("GET /api/sync", s.requireAuth(http.HandlerFunc(s.handleSync)))
 	mux.Handle("POST /api/ciphers", s.requireAuth(http.HandlerFunc(s.handleCreateCipher)))

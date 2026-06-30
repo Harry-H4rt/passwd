@@ -86,6 +86,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not create account")
 		return
 	}
+	s.audit(r.Context(), u.ID, evtRegister, "")
 	writeJSON(w, http.StatusCreated, map[string]string{"id": u.ID})
 }
 
@@ -117,6 +118,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	u, err := s.store.GetUserByIdentifierHash(r.Context(), idHash)
+	accountExists := err == nil
 	if err == nil {
 		var ok bool
 		ok, err = auth.VerifyVerifier(u.MasterPasswordVerifier, req.MasterPasswordHash)
@@ -148,6 +150,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 				// A code was supplied: complete the TOTP path (single-use, no replay).
 				if !u.TOTPEnabled || !s.verifyLoginTOTP(r.Context(), u, req.TOTPCode) {
 					s.lockout.recordFailure(idHash)
+					s.audit(r.Context(), u.ID, evtLoginFailure, "second factor")
 					writeError(w, http.StatusUnauthorized, "invalid credentials")
 					return
 				}
@@ -159,6 +162,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			s.lockout.reset(idHash)
+			s.audit(r.Context(), u.ID, evtLoginSuccess, "")
 			writeJSON(w, http.StatusOK, loginResponse{
 				AccessToken:      tokens.access,
 				RefreshToken:     tokens.refresh,
@@ -173,8 +177,13 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		auth.DummyVerify(req.MasterPasswordHash)
 	}
 
-	// Wrong identifier or wrong password — same generic response either way.
+	// Wrong identifier or wrong password — same generic response either way. Only
+	// record a failure event for a known account (an unknown identifier is not
+	// attributable and must not create an audit entry).
 	s.lockout.recordFailure(idHash)
+	if accountExists {
+		s.audit(r.Context(), u.ID, evtLoginFailure, "password")
+	}
 	writeError(w, http.StatusUnauthorized, "invalid credentials")
 }
 
@@ -214,6 +223,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	if rt.Used {
 		s.logger.Warn("refresh token reuse detected; revoking sessions", "user", rt.UserID)
 		_ = s.store.DeleteRefreshTokensForUser(r.Context(), rt.UserID)
+		s.audit(r.Context(), rt.UserID, evtTokenReuse, "")
 		writeError(w, http.StatusUnauthorized, "invalid or expired refresh token")
 		return
 	}

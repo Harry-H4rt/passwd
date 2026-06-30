@@ -51,6 +51,7 @@ func (s *Server) handleCreateCipher(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not create item")
 		return
 	}
+	s.audit(r.Context(), userID, evtCipherCreate, item.ID)
 	writeJSON(w, http.StatusCreated, item)
 }
 
@@ -79,6 +80,7 @@ func (s *Server) handleUpdateCipher(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not update item")
 		return
 	}
+	s.audit(r.Context(), userID, evtCipherUpdate, item.ID)
 	writeJSON(w, http.StatusOK, item)
 }
 
@@ -98,5 +100,6 @@ func (s *Server) handleDeleteCipher(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not delete item")
 		return
 	}
+	s.audit(r.Context(), userID, evtCipherDelete, id)
 	w.WriteHeader(http.StatusNoContent)
 }

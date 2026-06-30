@@ -122,6 +122,13 @@ export async function enableRecovery(s: Session): Promise<string> {
 
 export const disableRecovery = (s: Session) => api.recoveryDisable(s.accessToken);
 
+// --- security activity (audit log) ------------------------------------------
+
+export type ActivityEvent = api.AuditEvent;
+
+export const getActivity = (s: Session) =>
+  api.auditLog(s.accessToken).then((r) => r.events);
+
 // Forgot-password recovery: fetch the recovery-wrapped key, unwrap it with the
 // recovery code, set a NEW master password, and log in. The User Key is unchanged,
 // so existing vault items remain decryptable. A wrong code (or unknown account)

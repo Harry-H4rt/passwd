@@ -103,6 +103,36 @@ export const twoFactorEnable = (token: string, code: string) =>
 export const twoFactorDisable = (token: string, code: string) =>
   call<{ enabled: boolean }>("POST", "/api/2fa/disable", { code }, token);
 
+// --- account recovery -------------------------------------------------------
+// Recovery code enrollment (authenticated) and the forgot-password flow
+// (challenge → complete, no token). The server stores only the recovery-wrapped
+// key + a verifier; the recovery code itself never leaves the device.
+
+export const recoveryStatus = (token: string) =>
+  call<{ enabled: boolean }>("GET", "/api/recovery", undefined, token);
+
+export const recoveryEnable = (
+  token: string,
+  recoveryProtectedUserKey: string,
+  recoveryAuthHash: string,
+) =>
+  call<void>("POST", "/api/recovery/enable", { recoveryProtectedUserKey, recoveryAuthHash }, token);
+
+export const recoveryDisable = (token: string) =>
+  call<void>("POST", "/api/recovery/disable", undefined, token);
+
+export const recoveryChallenge = (identifier: string) =>
+  call<{ recoveryProtectedUserKey: string; kdf: Kdf }>(
+    "POST", "/api/auth/recovery/challenge", { identifier });
+
+export const recoveryComplete = (params: {
+  identifier: string;
+  recoveryAuthHash: string;
+  masterPasswordHash: string;
+  protectedUserKey: string;
+  kdf: Kdf;
+}) => call<LoginResult>("POST", "/api/auth/recovery/complete", params);
+
 // --- passkeys (WebAuthn) ----------------------------------------------------
 // The server returns/accepts standard WebAuthn JSON; the browser ceremony
 // (navigator.credentials) lives in session.ts via @simplewebauthn/browser.

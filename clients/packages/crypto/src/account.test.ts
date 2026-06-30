@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildRegistration, unlock, encryptItem, decryptItem } from "./account.js";
+import {
+  buildRegistration,
+  unlock,
+  encryptItem,
+  decryptItem,
+  enrollRecovery,
+  completeRecovery,
+  deriveRecoveryKeys,
+} from "./account.js";
 import { generateAccountId, normalizeIdentifier } from "./identifier.js";
 import { BIP39_WORDLIST } from "./wordlist.js";
 import type { KdfParams } from "./kdf.js";
@@ -54,6 +62,55 @@ test("generateAccountId produces valid, varied BIP39 passphrases", async () => {
   assert.equal(words.length, 12);
   for (const w of words) assert.ok(wordset.has(w), `"${w}" not in wordlist`);
   assert.notEqual(generateAccountId(12), generateAccountId(12)); // randomized
+});
+
+test("recovery code recovers the vault under a new master password", async () => {
+  const { bundle, userKey } = await buildRegistration(EMAIL, PASSWORD, KDF);
+  const cipher = await encryptItem(userKey, "top secret");
+
+  // Enroll recovery while unlocked.
+  const enroll = await enrollRecovery(userKey);
+  assert.equal(enroll.recoveryCode.split(" ").length, 24);
+  assert.ok(enroll.recoveryProtectedUserKey.startsWith("1.")); // AES-GCM EncString
+
+  // User forgot the master password; recover with the code + a NEW password.
+  const NEW_PASSWORD = "a brand new master password";
+  const reset = await completeRecovery(
+    enroll.recoveryCode,
+    enroll.recoveryProtectedUserKey,
+    EMAIL,
+    NEW_PASSWORD,
+    KDF,
+  );
+
+  // The User Key is unchanged, so the old ciphertext still decrypts.
+  assert.deepEqual(reset.userKey, userKey);
+  assert.equal(await decryptItem(reset.userKey, cipher), "top secret");
+
+  // The server can authorize the swap: the auth hash matches what was enrolled.
+  assert.equal(reset.recoveryAuthHash, enroll.recoveryAuthHash);
+
+  // Logging in with the new password (and the new protected key) works; the old
+  // one no longer derives the User Key.
+  const session = await unlock(EMAIL, NEW_PASSWORD, reset.kdf, reset.protectedUserKey);
+  assert.equal(await decryptItem(session.userKey, cipher), "top secret");
+  await assert.rejects(unlock(EMAIL, PASSWORD, KDF, reset.protectedUserKey));
+});
+
+test("wrong recovery code cannot unwrap the user key", async () => {
+  const { userKey } = await buildRegistration(EMAIL, PASSWORD, KDF);
+  const enroll = await enrollRecovery(userKey);
+  await assert.rejects(
+    completeRecovery(generateAccountId(24), enroll.recoveryProtectedUserKey, EMAIL, "new pw", KDF),
+  );
+});
+
+test("recovery code re-typed with messy spacing/case still derives the same keys", async () => {
+  const { userKey } = await buildRegistration(EMAIL, PASSWORD, KDF);
+  const enroll = await enrollRecovery(userKey);
+  const messy = `  ${enroll.recoveryCode.toUpperCase().replace(/ /g, "   ")} `;
+  const keys = await deriveRecoveryKeys(messy);
+  assert.equal(keys.recoveryAuthHash, enroll.recoveryAuthHash);
 });
 
 test("a generated passphrase works as a login identifier", async () => {

@@ -15,6 +15,9 @@ import {
   listPasskeys,
   enrollPasskey,
   removePasskey,
+  getRecoveryStatus,
+  enableRecovery,
+  disableRecovery,
   type WebAuthnCredentialSummary,
 } from "@passwd/api-client";
 import { Icon } from "./components/Icon";
@@ -37,6 +40,7 @@ export function VaultScreen(props: {
   const [query, setQuery] = useState("");
   const [show2fa, setShow2fa] = useState(false);
   const [showPasskeys, setShowPasskeys] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
   const [showData, setShowData] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -137,6 +141,9 @@ export function VaultScreen(props: {
           <button className="nav-item" onClick={() => setShowPasskeys(true)}>
             <Icon name="lock" size={16} /> Passkeys
           </button>
+          <button className="nav-item" onClick={() => setShowRecovery(true)}>
+            <Icon name="key" size={16} /> Recovery code
+          </button>
         </nav>
         <div className="sidebar-footer">
           <button
@@ -230,6 +237,7 @@ export function VaultScreen(props: {
       {editing && <ItemEditor item={editing} onCancel={() => setEditing(null)} onSave={handleSave} />}
       {show2fa && <TwoFactor session={session} onClose={() => setShow2fa(false)} />}
       {showPasskeys && <Passkeys session={session} onClose={() => setShowPasskeys(false)} />}
+      {showRecovery && <RecoveryCode session={session} onClose={() => setShowRecovery(false)} />}
       {showData && (
         <ImportExport
           session={session}
@@ -645,6 +653,119 @@ function TwoFactor(props: { session: Session; onClose: () => void }) {
                 }}
               >
                 Set up 2FA
+              </AsyncButton>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function RecoveryCode(props: { session: Session; onClose: () => void }) {
+  const [loading, setLoading] = useState(true);
+  const [enabled, setEnabled] = useState(false);
+  // The 24-word code, held only in memory and shown once right after enrolling.
+  const [code, setCode] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getRecoveryStatus(props.session)
+      .then((s) => setEnabled(s.enabled))
+      .catch((e) => setError(errMsg(e)))
+      .finally(() => setLoading(false));
+  }, [props.session]);
+
+  async function generate() {
+    setError(null);
+    try {
+      setCode(await enableRecovery(props.session));
+      setEnabled(true);
+      return true;
+    } catch (e) {
+      setError(errMsg(e));
+      return false;
+    }
+  }
+
+  return (
+    <div className="modal-backdrop" onClick={props.onClose}>
+      <div className="card modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Recovery code</h2>
+        {loading ? (
+          <p className="muted">Loading...</p>
+        ) : code ? (
+          <>
+            <p className="muted">
+              Write down these 24 words and keep them somewhere safe and offline. They are the only
+              way back into your vault if you forget your master password, and they will not be shown
+              again. Anyone with this code can reset your password, so guard it like the password
+              itself.
+            </p>
+            <pre className="recovery-code">{code}</pre>
+            {error && <div className="error">{error}</div>}
+            <div className="row end">
+              <AsyncButton
+                variant="ghost"
+                successLabel="Copied"
+                onClick={async () => {
+                  await navigator.clipboard.writeText(code);
+                  return true;
+                }}
+              >
+                Copy
+              </AsyncButton>
+              <button className="primary" onClick={props.onClose}>
+                I've saved it
+              </button>
+            </div>
+          </>
+        ) : enabled ? (
+          <>
+            <p className="muted">
+              A recovery code is <strong>set up</strong>. You can generate a new one (which replaces
+              the old) or remove it. Removing it means a forgotten master password cannot be
+              recovered.
+            </p>
+            {error && <div className="error">{error}</div>}
+            <div className="row end">
+              <AsyncButton
+                variant="ghost"
+                danger
+                loadingLabel="Removing"
+                successLabel="Removed"
+                onClick={async () => {
+                  setError(null);
+                  try {
+                    await disableRecovery(props.session);
+                    setEnabled(false);
+                    return true;
+                  } catch (e) {
+                    setError(errMsg(e));
+                    return false;
+                  }
+                }}
+              >
+                Remove
+              </AsyncButton>
+              <AsyncButton variant="primary" loadingLabel="Generating" onClick={generate}>
+                Generate new code
+              </AsyncButton>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="muted">
+              Set up a recovery code so you can get back into your vault if you ever forget your
+              master password. It is generated on this device and shown only once; we never see it.
+            </p>
+            {error && <div className="error">{error}</div>}
+            <div className="row end">
+              <button className="ghost" onClick={props.onClose}>
+                Close
+              </button>
+              <AsyncButton variant="primary" loadingLabel="Generating" onClick={generate}>
+                Set up recovery code
               </AsyncButton>
             </div>
           </>

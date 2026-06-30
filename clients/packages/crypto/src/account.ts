@@ -13,7 +13,7 @@ import {
   utf8,
 } from "./primitives.js";
 import { EncType, parseEncString, serializeEncString } from "./encstring.js";
-import { normalizeIdentifier } from "./identifier.js";
+import { generateAccountId, normalizeIdentifier } from "./identifier.js";
 
 const USER_KEY_BYTES = 64; // 32 for AES-GCM + 32 reserved (per-item / CBC-HMAC compat)
 
@@ -122,4 +122,98 @@ export async function unlock(
   const userKey = await unwrapUserKey(stretched, protectedUserKey);
   const masterPasswordHash = await deriveMasterPasswordHash(masterKey, masterPassword);
   return { userKey, masterPasswordHash };
+}
+
+// --- Account recovery -------------------------------------------------------
+//
+// A Recovery Code is an independent, user-controlled way back into the vault if
+// the master password is forgotten — never a server-side reset. It is a 24-word
+// BIP39 phrase that wraps the *same* User Key, so recovering does not re-encrypt
+// the vault. From the phrase we derive two subkeys (mirroring the master-password
+// split): a recoveryEncKey that wraps the User Key, and a recoveryAuthHash that
+// the server stores as a verifier — so it can authorize a master-password reset
+// without ever learning the phrase, the User Key, or the new password.
+
+const RECOVERY_KDF_SALT = "passwd.recovery.salt.v1";
+const RECOVERY_KDF_ITERATIONS = 100_000;
+
+export interface RecoveryKeys {
+  recoveryEncKey: Uint8Array; // 32 bytes, AES-GCM, wraps the User Key
+  recoveryAuthHash: string; // base64; sent to the server (verifier input)
+}
+
+// Derive recovery subkeys from the recovery phrase. The phrase carries ~264 bits
+// of entropy, so a heavy KDF is not required for brute-force resistance; PBKDF2 +
+// HKDF-Expand domain separation keeps it consistent with the rest of the design.
+// normalizeIdentifier lets the user re-type the phrase with messy spacing/case.
+export async function deriveRecoveryKeys(recoveryCode: string): Promise<RecoveryKeys> {
+  const base = await pbkdf2(
+    utf8(normalizeIdentifier(recoveryCode)),
+    utf8(RECOVERY_KDF_SALT),
+    RECOVERY_KDF_ITERATIONS,
+    32,
+  );
+  return {
+    recoveryEncKey: await hkdfExpand(base, "recovery-enc", 32),
+    recoveryAuthHash: toBase64(await hkdfExpand(base, "recovery-auth", 32)),
+  };
+}
+
+export async function wrapUserKeyWithRecovery(
+  recoveryEncKey: Uint8Array,
+  userKey: Uint8Array,
+): Promise<string> {
+  const { nonce, ciphertext } = await aesGcmEncrypt(recoveryEncKey, userKey);
+  return serializeEncString({ type: EncType.AesGcm, nonce, data: ciphertext });
+}
+
+export async function unwrapUserKeyWithRecovery(
+  recoveryEncKey: Uint8Array,
+  recoveryProtectedUserKey: string,
+): Promise<Uint8Array> {
+  const e = parseEncString(recoveryProtectedUserKey);
+  return aesGcmDecrypt(recoveryEncKey, e.nonce, e.data);
+}
+
+export interface RecoveryEnrollment {
+  recoveryCode: string; // the 24-word phrase, shown to the user exactly once
+  recoveryProtectedUserKey: string; // uploaded
+  recoveryAuthHash: string; // uploaded (server stores Argon2id of it)
+}
+
+// Generate a recovery code plus everything the server needs to store, given the
+// currently-unlocked User Key. Run only while the vault is unlocked.
+export async function enrollRecovery(userKey: Uint8Array): Promise<RecoveryEnrollment> {
+  const recoveryCode = generateAccountId(24);
+  const { recoveryEncKey, recoveryAuthHash } = await deriveRecoveryKeys(recoveryCode);
+  const recoveryProtectedUserKey = await wrapUserKeyWithRecovery(recoveryEncKey, userKey);
+  return { recoveryCode, recoveryProtectedUserKey, recoveryAuthHash };
+}
+
+export interface RecoveryReset {
+  recoveryAuthHash: string; // proves possession of the recovery code to the server
+  masterPasswordHash: string; // new login credential
+  protectedUserKey: string; // User Key re-wrapped under the new master password
+  kdf: KdfParams;
+  userKey: Uint8Array; // in-memory, for the now-unlocked session
+}
+
+// Recover the vault: unwrap the User Key with the recovery code, then re-wrap it
+// under a NEW master password. The User Key itself is unchanged, so stored vault
+// items stay valid (no re-encryption). Returns the recoveryAuthHash so the caller
+// can prove to the server it may swap in the new credentials.
+export async function completeRecovery(
+  recoveryCode: string,
+  recoveryProtectedUserKey: string,
+  identifier: string,
+  newMasterPassword: string,
+  params: KdfParams,
+): Promise<RecoveryReset> {
+  const { recoveryEncKey, recoveryAuthHash } = await deriveRecoveryKeys(recoveryCode);
+  const userKey = await unwrapUserKeyWithRecovery(recoveryEncKey, recoveryProtectedUserKey);
+  const masterKey = await deriveMasterKey(newMasterPassword, identifier, params);
+  const stretched = await stretchMasterKey(masterKey);
+  const protectedUserKey = await wrapUserKey(stretched, userKey);
+  const masterPasswordHash = await deriveMasterPasswordHash(masterKey, newMasterPassword);
+  return { recoveryAuthHash, masterPasswordHash, protectedUserKey, kdf: params, userKey };
 }

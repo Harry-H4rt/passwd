@@ -41,10 +41,12 @@ func (s *Server) handlePrelogin(w http.ResponseWriter, r *http.Request) {
 // --- Register ---------------------------------------------------------------
 
 type registerRequest struct {
-	Identifier         string            `json:"identifier"`
-	KDF                storage.KDFParams `json:"kdf"`
-	MasterPasswordHash string            `json:"masterPasswordHash"`
-	ProtectedUserKey   string            `json:"protectedUserKey"`
+	Identifier          string            `json:"identifier"`
+	KDF                 storage.KDFParams `json:"kdf"`
+	MasterPasswordHash  string            `json:"masterPasswordHash"`
+	ProtectedUserKey    string            `json:"protectedUserKey"`
+	PublicKey           string            `json:"publicKey"`
+	ProtectedPrivateKey string            `json:"protectedPrivateKey"`
 }
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +76,8 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		KDF:                    req.KDF,
 		MasterPasswordVerifier: verifier,
 		ProtectedUserKey:       req.ProtectedUserKey,
+		PublicKey:              req.PublicKey,
+		ProtectedPrivateKey:    req.ProtectedPrivateKey,
 		CreatedAt:              now,
 		UpdatedAt:              now,
 	}
@@ -99,10 +103,11 @@ type loginRequest struct {
 }
 
 type loginResponse struct {
-	AccessToken      string            `json:"accessToken"`
-	RefreshToken     string            `json:"refreshToken"`
-	ProtectedUserKey string            `json:"protectedUserKey"`
-	KDF              storage.KDFParams `json:"kdf"`
+	AccessToken         string            `json:"accessToken"`
+	RefreshToken        string            `json:"refreshToken"`
+	ProtectedUserKey    string            `json:"protectedUserKey"`
+	ProtectedPrivateKey string            `json:"protectedPrivateKey,omitempty"`
+	KDF                 storage.KDFParams `json:"kdf"`
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -164,10 +169,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			s.lockout.reset(idHash)
 			s.audit(r.Context(), u.ID, evtLoginSuccess, "")
 			writeJSON(w, http.StatusOK, loginResponse{
-				AccessToken:      tokens.access,
-				RefreshToken:     tokens.refresh,
-				ProtectedUserKey: u.ProtectedUserKey,
-				KDF:              u.KDF,
+				AccessToken:         tokens.access,
+				RefreshToken:        tokens.refresh,
+				ProtectedUserKey:    u.ProtectedUserKey,
+				ProtectedPrivateKey: u.ProtectedPrivateKey,
+				KDF:                 u.KDF,
 			})
 			return
 		}

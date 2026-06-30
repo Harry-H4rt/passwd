@@ -17,6 +17,7 @@ type Memory struct {
 	refresh  map[string]RefreshToken       // token hash -> RefreshToken
 	passkeys map[string]WebAuthnCredential // row id -> credential
 	audit    []AuditEvent                  // append-only, oldest first
+	shares   map[string]Share              // id -> Share
 }
 
 func NewMemory() *Memory {
@@ -26,6 +27,7 @@ func NewMemory() *Memory {
 		ciphers:  make(map[string]Cipher),
 		refresh:  make(map[string]RefreshToken),
 		passkeys: make(map[string]WebAuthnCredential),
+		shares:   make(map[string]Share),
 	}
 }
 
@@ -270,6 +272,40 @@ func (m *Memory) DeleteRefreshTokensForUser(_ context.Context, userID string) er
 			delete(m.refresh, hash)
 		}
 	}
+	return nil
+}
+
+func (m *Memory) CreateShare(_ context.Context, s Share) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, exists := m.shares[s.ID]; exists {
+		return ErrConflict
+	}
+	m.shares[s.ID] = s
+	return nil
+}
+
+func (m *Memory) ListSharesForRecipient(_ context.Context, recipientUserID string) ([]Share, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	out := make([]Share, 0)
+	for _, s := range m.shares {
+		if s.RecipientUserID == recipientUserID {
+			out = append(out, s)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, nil
+}
+
+func (m *Memory) DeleteShare(_ context.Context, userID, id string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.shares[id]
+	if !ok || (s.RecipientUserID != userID && s.OwnerUserID != userID) {
+		return ErrNotFound
+	}
+	delete(m.shares, id)
 	return nil
 }
 

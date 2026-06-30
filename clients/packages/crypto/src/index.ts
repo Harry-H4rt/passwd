@@ -5,5 +5,6 @@ export * from "./identifier.js";
 export * from "./account.js";
 export * from "./backup.js";
 export * from "./password.js";
+export * from "./sharing.js";
 export * from "./vault.js";
 export { BIP39_WORDLIST } from "./wordlist.js";

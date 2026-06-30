@@ -19,7 +19,11 @@ import {
   enableRecovery,
   disableRecovery,
   getActivity,
+  shareItem,
+  listSharedWithMe,
+  removeSharedItem,
   type ActivityEvent,
+  type SharedItem,
   type WebAuthnCredentialSummary,
 } from "@passwd/api-client";
 import { Icon } from "./components/Icon";
@@ -44,6 +48,8 @@ export function VaultScreen(props: {
   const [showPasskeys, setShowPasskeys] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
+  const [showShared, setShowShared] = useState(false);
+  const [sharing, setSharing] = useState<VaultItem | null>(null);
   const [showData, setShowData] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -150,6 +156,9 @@ export function VaultScreen(props: {
           <button className="nav-item" onClick={() => setShowActivity(true)}>
             <Icon name="clock" size={16} /> Activity
           </button>
+          <button className="nav-item" onClick={() => setShowShared(true)}>
+            <Icon name="share" size={16} /> Shared with me
+          </button>
         </nav>
         <div className="sidebar-footer">
           <button
@@ -228,6 +237,7 @@ export function VaultScreen(props: {
             onCopy={copy}
             onEdit={() => setEditing(selected)}
             onDelete={() => handleDelete(selected)}
+            onShare={() => setSharing(selected)}
             onSaveNotes={(notes) => saveNotes(selected, notes)}
           />
         ) : (
@@ -245,6 +255,20 @@ export function VaultScreen(props: {
       {showPasskeys && <Passkeys session={session} onClose={() => setShowPasskeys(false)} />}
       {showRecovery && <RecoveryCode session={session} onClose={() => setShowRecovery(false)} />}
       {showActivity && <Activity session={session} onClose={() => setShowActivity(false)} />}
+      {showShared && (
+        <SharedWithMe session={session} onClose={() => setShowShared(false)} onCopy={copy} />
+      )}
+      {sharing && (
+        <ShareDialog
+          session={session}
+          item={sharing}
+          onClose={() => setSharing(null)}
+          onShared={() => {
+            setSharing(null);
+            flash("Shared");
+          }}
+        />
+      )}
       {showData && (
         <ImportExport
           session={session}
@@ -387,6 +411,7 @@ function ItemDetail(props: {
   onCopy: (label: string, value: string) => void;
   onEdit: () => void;
   onDelete: () => void;
+  onShare: () => void;
   onSaveNotes: (notes: string) => void;
 }) {
   const { item } = props;
@@ -400,6 +425,9 @@ function ItemDetail(props: {
         <div className="detail-actions">
           <button className="ghost" onClick={props.onEdit}>
             <Icon name="edit" size={16} /> Edit
+          </button>
+          <button className="ghost" onClick={props.onShare}>
+            <Icon name="share" size={16} /> Share
           </button>
           <button className="ghost danger" onClick={props.onDelete}>
             <Icon name="trash" size={16} /> Delete
@@ -714,6 +742,141 @@ function Activity(props: { session: Session; onClose: () => void }) {
                   {ACTIVITY_LABELS[e.event] ?? e.event}
                 </span>
                 <span className="activity-time">{new Date(e.createdAt).toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="row end">
+          <button className="ghost" onClick={props.onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShareDialog(props: {
+  session: Session;
+  item: VaultItem;
+  onClose: () => void;
+  onShared: () => void;
+}) {
+  const [recipient, setRecipient] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="modal-backdrop" onClick={props.onClose}>
+      <div className="card modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Share "{props.item.name || "(unnamed)"}"</h2>
+        <p className="muted">
+          Enter the recipient's account identifier (their passphrase or email). The item is
+          encrypted to their public key — only they can read it, and the server never can.
+        </p>
+        <label>Recipient identifier</label>
+        <input
+          value={recipient}
+          onChange={(e) => setRecipient(e.target.value)}
+          placeholder="their passphrase or email"
+          autoComplete="off"
+          spellCheck={false}
+          autoFocus
+        />
+        {error && <div className="error">{error}</div>}
+        <div className="row end">
+          <button className="ghost" onClick={props.onClose}>
+            Cancel
+          </button>
+          <AsyncButton
+            variant="primary"
+            loadingLabel="Sharing"
+            successLabel="Shared"
+            onClick={async () => {
+              setError(null);
+              if (!recipient.trim()) {
+                setError("Enter a recipient identifier.");
+                return false;
+              }
+              try {
+                await shareItem(props.session, recipient.trim(), props.item);
+                props.onShared();
+                return true;
+              } catch (e) {
+                setError(errMsg(e) || "Could not share — check the recipient identifier.");
+                return false;
+              }
+            }}
+          >
+            Share item
+          </AsyncButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SharedWithMe(props: {
+  session: Session;
+  onClose: () => void;
+  onCopy: (label: string, value: string) => void;
+}) {
+  const [items, setItems] = useState<SharedItem[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function reload() {
+    listSharedWithMe(props.session)
+      .then(setItems)
+      .catch((e) => setError(errMsg(e)));
+  }
+  useEffect(reload, [props.session]);
+
+  return (
+    <div className="modal-backdrop" onClick={props.onClose}>
+      <div className="card modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Shared with me</h2>
+        <p className="muted">Items other people have shared with you, decrypted on this device.</p>
+        {error && <div className="error">{error}</div>}
+        {!items ? (
+          <p className="muted">Loading...</p>
+        ) : items.length === 0 ? (
+          <p className="muted">Nothing has been shared with you yet.</p>
+        ) : (
+          <ul className="shared-list">
+            {items.map((it) => (
+              <li key={it.shareId} className="shared-row">
+                <div className="shared-main">
+                  <div className="item-name">{it.name || "(unnamed)"}</div>
+                  <div className="item-sub">{it.username || it.url || "no details"}</div>
+                </div>
+                <div className="shared-actions">
+                  {it.username && (
+                    <button className="ghost" onClick={() => props.onCopy("username", it.username)}>
+                      Copy user
+                    </button>
+                  )}
+                  {it.password && (
+                    <button className="ghost" onClick={() => props.onCopy("password", it.password)}>
+                      Copy pass
+                    </button>
+                  )}
+                  <AsyncButton
+                    variant="ghost"
+                    danger
+                    loadingLabel="Removing"
+                    onClick={async () => {
+                      try {
+                        await removeSharedItem(props.session, it.shareId);
+                        reload();
+                        return true;
+                      } catch (e) {
+                        setError(errMsg(e));
+                        return false;
+                      }
+                    }}
+                  >
+                    Remove
+                  </AsyncButton>
+                </div>
               </li>
             ))}
           </ul>

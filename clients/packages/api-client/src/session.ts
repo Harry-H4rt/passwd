@@ -13,6 +13,8 @@ import {
   generateAccountId,
   enrollRecovery,
   completeRecovery,
+  createShare,
+  openShare,
   DEFAULT_KDF,
 } from "@passwd/crypto";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
@@ -23,6 +25,14 @@ export interface Session {
   accessToken: string;
   refreshToken: string;
   userKey: Uint8Array;
+  // The User-Key-wrapped sharing private key, returned at login. Empty for accounts
+  // created before sharing existed; needed to open items shared to this user.
+  protectedPrivateKey: string;
+}
+
+// A vault item received from another user, decrypted locally.
+export interface SharedItem extends VaultItem {
+  shareId: string;
 }
 
 // Decrypted vault item. `id` is the server cipher id; the rest is encrypted.
@@ -58,7 +68,13 @@ export async function registerAccount(identifier: string, masterPassword: string
   if ("twoFactorRequired" in res && res.twoFactorRequired) {
     throw new Error("unexpected two-factor challenge on a new account");
   }
-  return { identifier: bundle.identifier, accessToken: res.accessToken, refreshToken: res.refreshToken, userKey };
+  return {
+    identifier: bundle.identifier,
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    userKey,
+    protectedPrivateKey: bundle.protectedPrivateKey,
+  };
 }
 
 export async function loginAccount(
@@ -76,7 +92,13 @@ export async function loginAccount(
   }
   const stretched = await stretchMasterKey(masterKey);
   const userKey = await unwrapUserKey(stretched, res.protectedUserKey);
-  return { identifier, accessToken: res.accessToken, refreshToken: res.refreshToken, userKey };
+  return {
+    identifier,
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    userKey,
+    protectedPrivateKey: res.protectedPrivateKey ?? "",
+  };
 }
 
 // Completes a passkey (WebAuthn) second-factor login. The password is verified
@@ -92,7 +114,13 @@ export async function loginWithPasskey(identifier: string, masterPassword: strin
   const res = await api.webauthnLoginFinish(identifier, masterPasswordHash, sessionId, assertion);
   const stretched = await stretchMasterKey(masterKey);
   const userKey = await unwrapUserKey(stretched, res.protectedUserKey);
-  return { identifier, accessToken: res.accessToken, refreshToken: res.refreshToken, userKey };
+  return {
+    identifier,
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    userKey,
+    protectedPrivateKey: res.protectedPrivateKey ?? "",
+  };
 }
 
 // --- two-factor (TOTP) ------------------------------------------------------
@@ -153,8 +181,48 @@ export async function recoverAccount(
     protectedUserKey: reset.protectedUserKey,
     kdf: reset.kdf,
   });
-  return { identifier, accessToken: res.accessToken, refreshToken: res.refreshToken, userKey: reset.userKey };
+  return {
+    identifier,
+    accessToken: res.accessToken,
+    refreshToken: res.refreshToken,
+    userKey: reset.userKey,
+    protectedPrivateKey: res.protectedPrivateKey ?? "",
+  };
 }
+
+// --- item sharing -----------------------------------------------------------
+
+// Share a vault item with another user: look up their public key, encrypt the
+// item to it, and upload. The recipient's identifier is needed to find them.
+export async function shareItem(s: Session, recipientIdentifier: string, item: VaultItem): Promise<void> {
+  const { publicKey } = await api.lookupPublicKey(s.accessToken, recipientIdentifier);
+  const { id: _id, ...fields } = item;
+  const envelope = await createShare(publicKey, JSON.stringify(fields));
+  await api.createShare(s.accessToken, {
+    recipientIdentifier,
+    wrappedKey: envelope.wrappedKey,
+    data: envelope.data,
+  });
+}
+
+// List items shared with the current user, decrypted locally with their private key.
+export async function listSharedWithMe(s: Session): Promise<SharedItem[]> {
+  const { shares } = await api.listShares(s.accessToken);
+  const items: SharedItem[] = [];
+  for (const sh of shares) {
+    try {
+      const fields = JSON.parse(
+        await openShare(s.userKey, s.protectedPrivateKey, { wrappedKey: sh.wrappedKey, data: sh.data }),
+      ) as ItemFields;
+      items.push({ id: sh.id, shareId: sh.id, ...blankFields(), ...fields });
+    } catch {
+      // skip shares we can't decrypt
+    }
+  }
+  return items;
+}
+
+export const removeSharedItem = (s: Session, shareId: string) => api.deleteShare(s.accessToken, shareId);
 
 // --- passkeys (WebAuthn) ----------------------------------------------------
 

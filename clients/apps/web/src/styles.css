@@ -527,6 +527,34 @@ button {
   white-space: nowrap;
 }
 
+/* "Shared with me" list. */
+.shared-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.shared-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.shared-row:last-child {
+  border-bottom: none;
+}
+.shared-main {
+  min-width: 0;
+}
+.shared-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
 /* Inline text-button (e.g. "Forgot your master password?"). */
 .linklike {
   align-self: flex-start;

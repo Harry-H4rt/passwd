@@ -19,6 +19,7 @@ export interface LoginResult {
   accessToken: string;
   refreshToken: string;
   protectedUserKey: string;
+  protectedPrivateKey?: string;
   kdf: Kdf;
 }
 
@@ -34,6 +35,8 @@ export interface RegistrationBundle {
   kdf: Kdf;
   masterPasswordHash: string;
   protectedUserKey: string;
+  publicKey: string;
+  protectedPrivateKey: string;
 }
 
 let baseUrl = "";
@@ -184,6 +187,30 @@ export interface AuditEvent {
 
 export const auditLog = (token: string) =>
   call<{ events: AuditEvent[] }>("GET", "/api/audit", undefined, token);
+
+// --- sharing ----------------------------------------------------------------
+
+export interface ShareDto {
+  id: string;
+  wrappedKey: string;
+  data: string;
+  createdAt: string;
+}
+
+export const lookupPublicKey = (token: string, identifier: string) =>
+  call<{ publicKey: string }>(
+    "GET", `/api/users/public-key?identifier=${encodeURIComponent(identifier)}`, undefined, token);
+
+export const createShare = (
+  token: string,
+  share: { recipientIdentifier: string; wrappedKey: string; data: string },
+) => call<{ id: string }>("POST", "/api/shares", share, token);
+
+export const listShares = (token: string) =>
+  call<{ shares: ShareDto[] }>("GET", "/api/shares", undefined, token);
+
+export const deleteShare = (token: string, id: string) =>
+  call<void>("DELETE", `/api/shares/${id}`, undefined, token);
 
 export const sync = (token: string) =>
   call<{ ciphers: CipherDto[] }>("GET", "/api/sync", undefined, token);

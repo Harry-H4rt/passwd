@@ -165,10 +165,11 @@ func (s *Server) handleRecoveryComplete(w http.ResponseWriter, r *http.Request) 
 			}
 			s.lockout.reset(idHash)
 			writeJSON(w, http.StatusOK, loginResponse{
-				AccessToken:      tokens.access,
-				RefreshToken:     tokens.refresh,
-				ProtectedUserKey: req.ProtectedUserKey,
-				KDF:              kdf,
+				AccessToken:         tokens.access,
+				RefreshToken:        tokens.refresh,
+				ProtectedUserKey:    req.ProtectedUserKey,
+				ProtectedPrivateKey: u.ProtectedPrivateKey,
+				KDF:                 kdf,
 			})
 			return
 		}

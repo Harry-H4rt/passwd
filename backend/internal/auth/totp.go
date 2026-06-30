@@ -41,21 +41,30 @@ func CurrentTOTP(secret string) (string, error) {
 
 // VerifyTOTP checks a code against the secret, allowing ±1 step for clock skew.
 func VerifyTOTP(secret, code string) bool {
+	_, ok := VerifyTOTPAt(secret, code)
+	return ok
+}
+
+// VerifyTOTPAt is like VerifyTOTP but, on success, also returns the matched time-
+// step counter so callers can reject replays (a code whose counter is not strictly
+// greater than the last one consumed).
+func VerifyTOTPAt(secret, code string) (uint64, bool) {
 	code = strings.TrimSpace(code)
 	if len(code) != totpDigits {
-		return false
+		return 0, false
 	}
 	now := time.Now()
 	for _, skew := range []time.Duration{0, -totpPeriod, totpPeriod} {
-		want, err := totpAt(secret, now.Add(skew))
+		t := now.Add(skew)
+		want, err := totpAt(secret, t)
 		if err != nil {
-			return false
+			return 0, false
 		}
 		if subtle.ConstantTimeCompare([]byte(want), []byte(code)) == 1 {
-			return true
+			return uint64(t.Unix()) / uint64(totpPeriod.Seconds()), true
 		}
 	}
-	return false
+	return 0, false
 }
 
 func totpAt(secret string, t time.Time) (string, error) {

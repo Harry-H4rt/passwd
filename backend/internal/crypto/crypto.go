@@ -70,10 +70,15 @@ func HKDFExpand(prk []byte, info string, length int) ([]byte, error) {
 	return out, nil
 }
 
+// masterPasswordHashDomain domain-separates the auth hash from any other PBKDF2
+// use of the master key. Must match the TS deriveMasterPasswordHash constant.
+const masterPasswordHashDomain = "passwd.master-password-hash.v1:"
+
 // DeriveMasterPasswordHash is the authentication credential: one PBKDF2 pass over
-// the master key salted by the password, base64-encoded. Mirrors the TS function.
+// the master key salted by a domain-separated value derived from the password,
+// base64-encoded. Mirrors the TS function.
 func DeriveMasterPasswordHash(masterKey []byte, password string) string {
-	h := pbkdf2.Key(masterKey, []byte(password), 1, 32, sha256.New)
+	h := pbkdf2.Key(masterKey, []byte(masterPasswordHashDomain+password), 1, 32, sha256.New)
 	return base64.StdEncoding.EncodeToString(h)
 }
 

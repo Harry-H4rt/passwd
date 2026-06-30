@@ -33,6 +33,11 @@ type Config struct {
 	// ceremonies (e.g. "https://vault.example.com"). Defaults to AllowedOrigins,
 	// which is where the web vault is served from.
 	WebAuthnRPOrigins []string
+	// TrustedProxies lists reverse-proxy IPs whose X-Forwarded-For header is honored
+	// for client-IP rate limiting. Empty (the default) means the direct connection
+	// IP is always used. Only set this for proxies you control — the header is
+	// client-spoofable from any untrusted hop.
+	TrustedProxies []string
 }
 
 func Load() Config {
@@ -53,6 +58,7 @@ func Load() Config {
 		WebAuthnRPID:        getenv("PASSWD_WEBAUTHN_RP_ID", "localhost"),
 		WebAuthnRPName:      getenv("PASSWD_WEBAUTHN_RP_NAME", "passwd"),
 		WebAuthnRPOrigins:   rpOrigins,
+		TrustedProxies:      splitList(getenv("PASSWD_TRUSTED_PROXIES", "")),
 	}
 }
 

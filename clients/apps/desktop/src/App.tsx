@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { masterPasswordIssue } from "@passwd/crypto";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
 import { ThemeToggle } from "./components/ThemeToggle";
@@ -216,8 +217,9 @@ function Create(props: { path: string; onBack: () => void; onCreated: (v: Deskto
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
-    if (password.length < 8) {
-      setError("Master password must be at least 8 characters.");
+    const weak = masterPasswordIssue(password);
+    if (weak) {
+      setError(weak);
       return;
     }
     if (password !== confirm) {
@@ -250,7 +252,7 @@ function Create(props: { path: string; onBack: () => void; onCreated: (v: Deskto
           {props.path}
         </p>
         <label>Master password</label>
-        <PasswordField value={password} onChange={setPassword} placeholder="at least 8 characters" />
+        <PasswordField value={password} onChange={setPassword} placeholder="at least 12 characters" />
         <label>Confirm master password</label>
         <PasswordField value={confirm} onChange={setConfirm} placeholder="type it again" />
         {error && <div className="error">{error}</div>}

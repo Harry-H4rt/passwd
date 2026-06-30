@@ -218,6 +218,8 @@ pull request (see `.github/workflows/`).
 - [`docs/CRYPTO.md`](docs/CRYPTO.md) — the cryptographic design and threat model.
 - [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — production hardening, self-hosting,
   release builds, and store publishing.
+- [`docs/SECURITY-REVIEW.md`](docs/SECURITY-REVIEW.md) — internal security review,
+  findings, and remediations (not a substitute for an external audit).
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — the staged build plan and current status.
 
 ## License

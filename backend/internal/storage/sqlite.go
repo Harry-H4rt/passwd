@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
 	protected_user_key TEXT NOT NULL,
 	totp_secret        TEXT NOT NULL DEFAULT '',
 	totp_enabled       INTEGER NOT NULL DEFAULT 0,
+	totp_last_counter  INTEGER NOT NULL DEFAULT 0,
 	recovery_protected_user_key TEXT NOT NULL DEFAULT '',
 	recovery_verifier  TEXT NOT NULL DEFAULT '',
 	created_at         INTEGER NOT NULL,
@@ -47,7 +48,8 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
 	token_hash TEXT PRIMARY KEY,
 	user_id    TEXT NOT NULL,
 	expires_at INTEGER NOT NULL,
-	created_at INTEGER NOT NULL
+	created_at INTEGER NOT NULL,
+	used       INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_refresh_user ON refresh_tokens(user_id);
 CREATE TABLE IF NOT EXISTS webauthn_credentials (
@@ -86,6 +88,8 @@ func OpenSQLite(path string) (*SQLite, error) {
 		`ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE users ADD COLUMN recovery_protected_user_key TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN recovery_verifier TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN totp_last_counter INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE refresh_tokens ADD COLUMN used INTEGER NOT NULL DEFAULT 0`,
 	} {
 		if _, err := db.ExecContext(context.Background(), stmt); err != nil &&
 			!strings.Contains(err.Error(), "duplicate column name") {
@@ -129,7 +133,7 @@ func (s *SQLite) scanUser(row *sql.Row) (User, error) {
 	var totpEnabled int
 	err := row.Scan(&u.ID, &u.IdentifierHash, &u.KDF.Type, &u.KDF.Iterations,
 		&u.KDF.MemoryMiB, &u.KDF.Parallelism, &u.MasterPasswordVerifier,
-		&u.ProtectedUserKey, &u.TOTPSecret, &totpEnabled,
+		&u.ProtectedUserKey, &u.TOTPSecret, &totpEnabled, &u.TOTPLastCounter,
 		&u.RecoveryProtectedUserKey, &u.RecoveryVerifier, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
@@ -144,7 +148,8 @@ func (s *SQLite) scanUser(row *sql.Row) (User, error) {
 
 const userCols = `id, identifier_hash, kdf_type, kdf_iterations, kdf_memory_mib,
 	kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled,
-	recovery_protected_user_key, recovery_verifier, created_at, updated_at`
+	totp_last_counter, recovery_protected_user_key, recovery_verifier,
+	created_at, updated_at`
 
 func (s *SQLite) GetUserByIdentifierHash(ctx context.Context, identifierHash string) (User, error) {
 	return s.scanUser(s.db.QueryRowContext(ctx,
@@ -157,9 +162,19 @@ func (s *SQLite) GetUserByID(ctx context.Context, id string) (User, error) {
 }
 
 func (s *SQLite) SetUserTOTP(ctx context.Context, userID, secret string, enabled bool) error {
+	// Reset the replay baseline whenever the secret changes.
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE users SET totp_secret = ?, totp_enabled = ? WHERE id = ?`,
+		`UPDATE users SET totp_secret = ?, totp_enabled = ?, totp_last_counter = 0 WHERE id = ?`,
 		secret, boolToInt(enabled), userID)
+	if err != nil {
+		return err
+	}
+	return notFoundIfNoRows(res)
+}
+
+func (s *SQLite) SetUserTOTPCounter(ctx context.Context, userID string, counter uint64) error {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE users SET totp_last_counter = ? WHERE id = ?`, counter, userID)
 	if err != nil {
 		return err
 	}
@@ -323,9 +338,10 @@ func (s *SQLite) CreateRefreshToken(ctx context.Context, rt RefreshToken) error 
 func (s *SQLite) GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error) {
 	var rt RefreshToken
 	var expires, created int64
+	var used int
 	err := s.db.QueryRowContext(ctx,
-		`SELECT token_hash, user_id, expires_at, created_at FROM refresh_tokens WHERE token_hash = ?`, tokenHash).
-		Scan(&rt.TokenHash, &rt.UserID, &expires, &created)
+		`SELECT token_hash, user_id, expires_at, created_at, used FROM refresh_tokens WHERE token_hash = ?`, tokenHash).
+		Scan(&rt.TokenHash, &rt.UserID, &expires, &created, &used)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RefreshToken{}, ErrNotFound
 	}
@@ -333,11 +349,25 @@ func (s *SQLite) GetRefreshToken(ctx context.Context, tokenHash string) (Refresh
 		return RefreshToken{}, err
 	}
 	rt.ExpiresAt, rt.CreatedAt = fromUnix(expires), fromUnix(created)
+	rt.Used = used != 0
 	return rt, nil
 }
 
 func (s *SQLite) DeleteRefreshToken(ctx context.Context, tokenHash string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM refresh_tokens WHERE token_hash = ?`, tokenHash)
+	return err
+}
+
+func (s *SQLite) MarkRefreshTokenUsed(ctx context.Context, tokenHash string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE refresh_tokens SET used = 1 WHERE token_hash = ?`, tokenHash)
+	if err != nil {
+		return err
+	}
+	return notFoundIfNoRows(res)
+}
+
+func (s *SQLite) DeleteRefreshTokensForUser(ctx context.Context, userID string) error {
+	_, err := s.db.ExecContext(ctx, `DELETE FROM refresh_tokens WHERE user_id = ?`, userID)
 	return err
 }
 

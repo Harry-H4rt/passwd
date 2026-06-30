@@ -149,6 +149,11 @@ func (s *Server) handleRecoveryComplete(w http.ResponseWriter, r *http.Request) 
 				writeError(w, http.StatusInternalServerError, "recovery failed")
 				return
 			}
+			// Recovery often follows a suspected compromise: revoke every existing
+			// session so a stolen refresh token cannot outlive the password reset.
+			if derr := s.store.DeleteRefreshTokensForUser(r.Context(), u.ID); derr != nil {
+				s.logger.Error("revoke sessions on recovery", "err", derr)
+			}
 			tokens, terr := s.issueTokens(r, u.ID)
 			if terr != nil {
 				s.logger.Error("issue tokens", "err", terr)
@@ -164,6 +169,10 @@ func (s *Server) handleRecoveryComplete(w http.ResponseWriter, r *http.Request) 
 			})
 			return
 		}
+	} else {
+		// No account or recovery not enabled: run a dummy verification so timing
+		// does not reveal which accounts exist or have recovery configured.
+		auth.DummyVerify(req.RecoveryAuthHash)
 	}
 
 	// Unknown identifier, recovery not enabled, or wrong code — same generic reply.

@@ -1,10 +1,41 @@
 package server
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/passwd-app/server/internal/auth"
+	"github.com/passwd-app/server/internal/storage"
 )
+
+// totpSecret decrypts a stored (at-rest encrypted) TOTP secret.
+func (s *Server) totpSecret(stored string) (string, bool) {
+	pt, err := auth.DecryptSecret(s.totpKey, stored)
+	if err != nil {
+		return "", false
+	}
+	return pt, true
+}
+
+// verifyLoginTOTP verifies a login TOTP code and enforces single use: the code's
+// time-step must be strictly greater than the last one consumed, so a code cannot
+// be replayed within its validity window. Used by the login path only (enrollment
+// and disable are already access-token-gated).
+func (s *Server) verifyLoginTOTP(ctx context.Context, u storage.User, code string) bool {
+	secret, ok := s.totpSecret(u.TOTPSecret)
+	if !ok {
+		return false
+	}
+	counter, ok := auth.VerifyTOTPAt(secret, code)
+	if !ok || counter <= u.TOTPLastCounter {
+		return false
+	}
+	if err := s.store.SetUserTOTPCounter(ctx, u.ID, counter); err != nil {
+		s.logger.Error("totp counter", "err", err)
+		return false
+	}
+	return true
+}
 
 // Two-factor (TOTP) endpoints, all behind requireAuth. Enrollment is two-step:
 // setup (generate + store a not-yet-active secret, return it so the client can
@@ -41,14 +72,20 @@ func (s *Server) handleTOTPSetup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not start setup")
 		return
 	}
-	// Store the secret but leave it disabled until the user confirms a code.
-	if err := s.store.SetUserTOTP(r.Context(), userID, secret, false); err != nil {
+	// Store the secret encrypted at rest, disabled until the user confirms a code.
+	enc, err := auth.EncryptSecret(s.totpKey, secret)
+	if err != nil {
+		s.logger.Error("totp seal", "err", err)
+		writeError(w, http.StatusInternalServerError, "could not start setup")
+		return
+	}
+	if err := s.store.SetUserTOTP(r.Context(), userID, enc, false); err != nil {
 		s.logger.Error("totp store", "err", err)
 		writeError(w, http.StatusInternalServerError, "could not start setup")
 		return
 	}
-	// Return only the secret; the client builds the otpauth URI with the user's
-	// identifier so it never reaches the server.
+	// Return only the plaintext secret; the client builds the otpauth URI with the
+	// user's identifier so it never reaches the server.
 	writeJSON(w, http.StatusOK, map[string]string{"secret": secret})
 }
 
@@ -67,7 +104,8 @@ func (s *Server) handleTOTPEnable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "run setup first")
 		return
 	}
-	if !auth.VerifyTOTP(u.TOTPSecret, req.Code) {
+	secret, ok := s.totpSecret(u.TOTPSecret)
+	if !ok || !auth.VerifyTOTP(secret, req.Code) {
 		writeError(w, http.StatusBadRequest, "invalid code")
 		return
 	}
@@ -94,7 +132,8 @@ func (s *Server) handleTOTPDisable(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]bool{"enabled": false})
 		return
 	}
-	if !auth.VerifyTOTP(u.TOTPSecret, req.Code) {
+	secret, ok := s.totpSecret(u.TOTPSecret)
+	if !ok || !auth.VerifyTOTP(secret, req.Code) {
 		writeError(w, http.StatusBadRequest, "invalid code")
 		return
 	}

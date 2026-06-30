@@ -312,6 +312,8 @@ func (s *Server) handleWebAuthnLoginBegin(w http.ResponseWriter, r *http.Request
 			writeJSON(w, http.StatusOK, map[string]any{"sessionId": sid, "options": options})
 			return
 		}
+	} else {
+		auth.DummyVerify(req.MasterPasswordHash) // equalize timing for unknown accounts
 	}
 	// Wrong identifier or password — generic response, counts toward lockout.
 	s.lockout.recordFailure(idHash)
@@ -339,6 +341,7 @@ func (s *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.Reques
 	}
 	u, err := s.store.GetUserByIdentifierHash(r.Context(), idHash)
 	if err != nil {
+		auth.DummyVerify(req.MasterPasswordHash) // equalize timing for unknown accounts
 		s.lockout.recordFailure(idHash)
 		writeError(w, http.StatusUnauthorized, "invalid credentials")
 		return

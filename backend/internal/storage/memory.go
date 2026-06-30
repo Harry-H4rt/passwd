@@ -70,6 +70,19 @@ func (m *Memory) SetUserTOTP(_ context.Context, userID, secret string, enabled b
 	}
 	u.TOTPSecret = secret
 	u.TOTPEnabled = enabled
+	u.TOTPLastCounter = 0 // a new/cleared secret invalidates any old replay baseline
+	m.users[userID] = u
+	return nil
+}
+
+func (m *Memory) SetUserTOTPCounter(_ context.Context, userID string, counter uint64) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	u.TOTPLastCounter = counter
 	m.users[userID] = u
 	return nil
 }
@@ -233,6 +246,29 @@ func (m *Memory) DeleteRefreshToken(_ context.Context, tokenHash string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.refresh, tokenHash)
+	return nil
+}
+
+func (m *Memory) MarkRefreshTokenUsed(_ context.Context, tokenHash string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	rt, ok := m.refresh[tokenHash]
+	if !ok {
+		return ErrNotFound
+	}
+	rt.Used = true
+	m.refresh[tokenHash] = rt
+	return nil
+}
+
+func (m *Memory) DeleteRefreshTokensForUser(_ context.Context, userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for hash, rt := range m.refresh {
+		if rt.UserID == userID {
+			delete(m.refresh, hash)
+		}
+	}
 	return nil
 }
 

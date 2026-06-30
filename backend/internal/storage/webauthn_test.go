@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"testing"
 	"time"
 )
@@ -11,21 +10,9 @@ import (
 // Runs the same passkey-storage contract against both Store implementations so the
 // in-memory test double can't drift from the durable SQLite behaviour.
 func TestWebAuthnCredentialStores(t *testing.T) {
-	stores := map[string]func(t *testing.T) Store{
-		"memory": func(t *testing.T) Store { return NewMemory() },
-		"sqlite": func(t *testing.T) Store {
-			s, err := OpenSQLite(filepath.Join(t.TempDir(), "test.db"))
-			if err != nil {
-				t.Fatalf("open sqlite: %v", err)
-			}
-			t.Cleanup(func() { s.Close() })
-			return s
-		},
-	}
-	for name, mk := range stores {
+	for name, st := range testStores(t) {
 		t.Run(name, func(t *testing.T) {
 			ctx := context.Background()
-			st := mk(t)
 
 			now := time.Now().UTC().Truncate(time.Second)
 			cred := WebAuthnCredential{

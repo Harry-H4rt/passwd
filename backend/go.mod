@@ -13,6 +13,7 @@ go 1.22
 
 require (
 	github.com/go-webauthn/webauthn v0.11.1
+	github.com/lib/pq v1.12.3
 	golang.org/x/crypto v0.31.0
 	modernc.org/sqlite v1.34.4
 )

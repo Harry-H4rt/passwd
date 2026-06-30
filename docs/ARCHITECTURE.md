@@ -55,13 +55,14 @@ internal/config/          env-based configuration
 internal/server/          router, middleware, HTTP handlers (transport layer)
 internal/auth/            registration, login, sessions/JWT, KDF params (domain)
 internal/vault/           ciphers/folders sync (domain, operates on ciphertext)
-internal/storage/         persistence interface + implementations (memory/SQLite)
+internal/storage/         persistence interface + implementations (memory/SQLite/Postgres)
 internal/crypto/          Go reference impl used to cross-check the TS test vectors
 ```
 
 Dependencies point inward: `server` → (`auth`, `vault`) → `storage`. Storage is an
-interface so we can start with an in-memory/SQLite impl and swap in Postgres for
-SaaS without touching domain code.
+interface with in-memory, SQLite, and PostgreSQL implementations that share one set
+of contract tests; selecting Postgres (a `postgres://` `PASSWD_DB`) for a SaaS
+deployment is a config change, not a code change in the domain layer.
 
 ## Single-tenant now, SaaS later
 

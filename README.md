@@ -220,6 +220,10 @@ pull request (see `.github/workflows/`).
   release builds, and store publishing.
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — the staged build plan and current status.
 
+## License
+
+Released under the [MIT License](LICENSE).
+
 ## Troubleshooting
 
 **A change isn't showing up (an edit appears to "revert").** The Vite dev server's

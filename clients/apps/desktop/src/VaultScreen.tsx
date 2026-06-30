@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { masterPasswordIssue } from "@passwd/crypto";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
 import { AsyncButton } from "./components/AsyncButton";
@@ -322,7 +323,7 @@ function ChangePassword(props: {
         <h2>Change master password</h2>
         <p className="muted">Re-keys this vault file. Items are not re-encrypted, only the wrapping key.</p>
         <label>New master password</label>
-        <PasswordField value={pw} onChange={setPw} placeholder="at least 8 characters" autoFocus />
+        <PasswordField value={pw} onChange={setPw} placeholder="at least 12 characters" autoFocus />
         <label>Confirm</label>
         <PasswordField value={confirm} onChange={setConfirm} placeholder="type it again" />
         {error && <div className="error">{error}</div>}
@@ -336,8 +337,9 @@ function ChangePassword(props: {
             successLabel="Changed"
             onClick={async () => {
               setError(null);
-              if (pw.length < 8) {
-                setError("Master password must be at least 8 characters.");
+              const weak = masterPasswordIssue(pw);
+              if (weak) {
+                setError(weak);
                 return false;
               }
               if (pw !== confirm) {

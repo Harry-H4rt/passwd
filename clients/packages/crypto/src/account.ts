@@ -34,14 +34,17 @@ export async function deriveMasterKey(
 }
 
 // Master Password Hash, the authentication credential sent to the server. One
-// PBKDF2 pass over the master key, salted by the password (mirrors Bitwarden).
-// The server stores Argon2id(this); it cannot recover the master key from it.
-// TODO(Phase 1): freeze this definition and publish known-answer test vectors.
+// PBKDF2 pass over the master key, salted by a domain-separated value derived from
+// the password (mirrors Bitwarden). The domain-separation prefix ensures this
+// output can never collide with any other PBKDF2 use of the master key. The server
+// stores Argon2id(this) and cannot recover the master key from it.
+const MASTER_PASSWORD_HASH_DOMAIN = "passwd.master-password-hash.v1:";
 export async function deriveMasterPasswordHash(
   masterKey: Uint8Array,
   masterPassword: string,
 ): Promise<string> {
-  const hash = await pbkdf2(masterKey, utf8(masterPassword.normalize("NFKC")), 1, 32);
+  const salt = utf8(MASTER_PASSWORD_HASH_DOMAIN + masterPassword.normalize("NFKC"));
+  const hash = await pbkdf2(masterKey, salt, 1, 32);
   return toBase64(hash);
 }
 

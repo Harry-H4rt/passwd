@@ -99,7 +99,7 @@ func (rl *rateLimiter) allow(key string) bool {
 
 func (s *Server) rateLimit(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !s.limiter.allow(clientIP(r)) {
+		if !s.limiter.allow(s.clientIP(r)) {
 			writeError(w, http.StatusTooManyRequests, "rate limit exceeded; slow down")
 			return
 		}
@@ -116,7 +116,24 @@ func isExtensionOrigin(origin string) bool {
 		strings.HasPrefix(origin, "chrome-extension://")
 }
 
-func clientIP(r *http.Request) string {
+// clientIP is the key used for IP rate limiting. By default it is the direct
+// connection IP. Only when that peer is a configured trusted proxy do we honor the
+// X-Forwarded-For header (taking the leftmost entry, the original client the proxy
+// recorded), since the header is client-spoofable from any untrusted hop.
+func (s *Server) clientIP(r *http.Request) string {
+	host := remoteHost(r)
+	if s.trustedProxies[host] {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			if i := strings.IndexByte(xff, ','); i >= 0 {
+				return strings.TrimSpace(xff[:i])
+			}
+			return strings.TrimSpace(xff)
+		}
+	}
+	return host
+}
+
+func remoteHost(r *http.Request) string {
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

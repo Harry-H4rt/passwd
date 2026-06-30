@@ -145,8 +145,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 					})
 					return
 				}
-				// A code was supplied: complete the TOTP path.
-				if !u.TOTPEnabled || !auth.VerifyTOTP(u.TOTPSecret, req.TOTPCode) {
+				// A code was supplied: complete the TOTP path (single-use, no replay).
+				if !u.TOTPEnabled || !s.verifyLoginTOTP(r.Context(), u, req.TOTPCode) {
 					s.lockout.recordFailure(idHash)
 					writeError(w, http.StatusUnauthorized, "invalid credentials")
 					return
@@ -167,6 +167,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 			})
 			return
 		}
+	} else {
+		// Account not found: run a dummy Argon2id verification so timing matches the
+		// wrong-password path and does not reveal whether the account exists.
+		auth.DummyVerify(req.MasterPasswordHash)
 	}
 
 	// Wrong identifier or wrong password — same generic response either way.
@@ -204,8 +208,18 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Rotate: invalidate the used token, issue a fresh pair.
-	_ = s.store.DeleteRefreshToken(r.Context(), hash)
+	// Reuse detection: a token is kept (marked used) after rotation. Presenting an
+	// already-used token means it was replayed — likely stolen — so revoke the whole
+	// session family for that user and refuse.
+	if rt.Used {
+		s.logger.Warn("refresh token reuse detected; revoking sessions", "user", rt.UserID)
+		_ = s.store.DeleteRefreshTokensForUser(r.Context(), rt.UserID)
+		writeError(w, http.StatusUnauthorized, "invalid or expired refresh token")
+		return
+	}
+
+	// Rotate: mark the presented token used (retained for reuse detection), issue a fresh pair.
+	_ = s.store.MarkRefreshTokenUsed(r.Context(), hash)
 	tokens, err := s.issueTokens(r, rt.UserID)
 	if err != nil {
 		s.logger.Error("issue tokens", "err", err)

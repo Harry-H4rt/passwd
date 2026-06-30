@@ -8,6 +8,7 @@ import {
   newAccountId,
   TwoFactorRequiredError,
 } from "@passwd/api-client";
+import { masterPasswordIssue } from "@passwd/crypto";
 import { VaultScreen } from "./VaultScreen";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
@@ -106,8 +107,9 @@ function AuthScreen(props: {
         setError("Enter your identifier and recovery code.");
         return;
       }
-      if (password.length < 8) {
-        setError("New master password must be at least 8 characters.");
+      const weak = masterPasswordIssue(password);
+      if (weak) {
+        setError(weak);
         return;
       }
       if (password !== confirm) {
@@ -129,8 +131,9 @@ function AuthScreen(props: {
       return;
     }
     if (mode === "register") {
-      if (password.length < 8) {
-        setError("Master password must be at least 8 characters.");
+      const weak = masterPasswordIssue(password);
+      if (weak) {
+        setError(weak);
         return;
       }
       if (password !== confirm) {

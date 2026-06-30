@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/argon2"
 )
@@ -36,6 +37,36 @@ func HashVerifier(masterPasswordHash string) (string, error) {
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, p.memKiB, p.timeCost, p.threads,
 		phcB64.EncodeToString(salt), phcB64.EncodeToString(h)), nil
+}
+
+// decoyVerifier is a real Argon2id verifier over a random value, computed once.
+// Verifying a candidate against it costs the same as a genuine verification.
+var (
+	decoyOnce     sync.Once
+	decoyVerifier string
+)
+
+func decoy() string {
+	decoyOnce.Do(func() {
+		b := make([]byte, 32)
+		if _, err := rand.Read(b); err != nil {
+			return
+		}
+		if v, err := HashVerifier(base64.RawStdEncoding.EncodeToString(b)); err == nil {
+			decoyVerifier = v
+		}
+	})
+	return decoyVerifier
+}
+
+// DummyVerify performs the same Argon2id work as VerifyVerifier against a decoy
+// verifier, so a request for an unknown account is indistinguishable by timing
+// from a wrong password for an existing one. This closes the account-enumeration
+// side channel. It intentionally returns nothing; the caller still denies access.
+func DummyVerify(masterPasswordHash string) {
+	if d := decoy(); d != "" {
+		_, _ = VerifyVerifier(d, masterPasswordHash)
+	}
 }
 
 // VerifyVerifier reports whether masterPasswordHash matches the stored verifier,

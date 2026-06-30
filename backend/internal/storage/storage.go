@@ -51,8 +51,12 @@ type User struct {
 	// is an auth factor, never vault content. Empty until enrolled.
 	TOTPSecret  string
 	TOTPEnabled bool
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	// TOTPLastCounter is the most recent TOTP time-step consumed at login. Codes
+	// with a step counter <= this are rejected, so a code cannot be replayed within
+	// its validity window. Reset whenever the secret changes.
+	TOTPLastCounter uint64
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
 }
 
 // Cipher is a fully opaque encrypted vault item. The server stores no item type —
@@ -92,6 +96,9 @@ type RefreshToken struct {
 	UserID    string
 	ExpiresAt time.Time
 	CreatedAt time.Time
+	// Used marks a token that has already been rotated. A used token is kept (not
+	// deleted) so that presenting it again is detected as token reuse/theft.
+	Used bool
 }
 
 // Store is the persistence interface. Implementations must be safe for concurrent
@@ -101,6 +108,9 @@ type Store interface {
 	GetUserByIdentifierHash(ctx context.Context, identifierHash string) (User, error)
 	GetUserByID(ctx context.Context, id string) (User, error)
 	SetUserTOTP(ctx context.Context, userID, secret string, enabled bool) error
+	// SetUserTOTPCounter records the last TOTP time-step consumed at login (replay
+	// protection).
+	SetUserTOTPCounter(ctx context.Context, userID string, counter uint64) error
 
 	// SetUserRecovery stores (or replaces) the recovery-wrapped User Key and the
 	// recovery verifier. ClearUserRecovery removes both (recovery disabled).
@@ -125,6 +135,12 @@ type Store interface {
 	CreateRefreshToken(ctx context.Context, rt RefreshToken) error
 	GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error)
 	DeleteRefreshToken(ctx context.Context, tokenHash string) error
+	// MarkRefreshTokenUsed flags a token as rotated without deleting it, so a later
+	// presentation of the same token can be detected as reuse.
+	MarkRefreshTokenUsed(ctx context.Context, tokenHash string) error
+	// DeleteRefreshTokensForUser revokes every refresh token for a user. Used on
+	// detected token reuse and on master-password rotation (recovery).
+	DeleteRefreshTokensForUser(ctx context.Context, userID string) error
 
 	Close() error
 }

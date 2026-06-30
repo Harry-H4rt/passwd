@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/passwd-app/server/internal/auth"
 	"github.com/passwd-app/server/internal/config"
 	"github.com/passwd-app/server/internal/storage"
 	"github.com/passwd-app/server/internal/vault"
@@ -20,6 +21,9 @@ type Server struct {
 	limiter        *rateLimiter
 	lockout        *lockoutTracker
 	allowedOrigins map[string]bool
+	trustedProxies map[string]bool
+	// totpKey encrypts TOTP secrets at rest. Derived from a stable server secret.
+	totpKey []byte
 	// webAuthn is the passkey relying-party engine. Nil if RP config is invalid, in
 	// which case the passkey endpoints return 503 (TOTP and password login are
 	// unaffected).
@@ -35,6 +39,10 @@ func New(cfg config.Config, store storage.Store, logger *slog.Logger) *Server {
 	allowed := make(map[string]bool, len(cfg.AllowedOrigins))
 	for _, o := range cfg.AllowedOrigins {
 		allowed[o] = true
+	}
+	trustedProxies := make(map[string]bool, len(cfg.TrustedProxies))
+	for _, p := range cfg.TrustedProxies {
+		trustedProxies[p] = true
 	}
 	wa, err := webauthn.New(&webauthn.Config{
 		RPID:          cfg.WebAuthnRPID,
@@ -54,6 +62,8 @@ func New(cfg config.Config, store storage.Store, logger *slog.Logger) *Server {
 		limiter:        newRateLimiter(rate, time.Minute),
 		lockout:        newLockoutTracker(5, 15*time.Minute), // 5 fails -> 15 min lock
 		allowedOrigins: allowed,
+		trustedProxies: trustedProxies,
+		totpKey:        auth.SecretBoxKey(cfg.IdentifierPepper),
 		webAuthn:       wa,
 		waPending:      newChallengeStore(2 * time.Minute),
 	}

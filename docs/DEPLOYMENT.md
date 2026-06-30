@@ -19,6 +19,7 @@ dev defaults:
 | `PASSWD_WEBAUTHN_RP_ID` | passkey Relying Party ID: web-vault host only, e.g. `vault.example.com` — set once, keep **stable** (passkeys bind to it) |
 | `PASSWD_WEBAUTHN_RP_NAME` | name authenticators show at enrollment (default `passwd`) |
 | `PASSWD_WEBAUTHN_RP_ORIGINS` | fully-qualified passkey ceremony origins, e.g. `https://vault.example.com` (defaults to `PASSWD_ALLOWED_ORIGINS`) |
+| `PASSWD_TRUSTED_PROXIES` | comma-separated reverse-proxy IPs whose `X-Forwarded-For` is trusted for rate limiting. **Set this when behind a proxy** (below); otherwise the per-IP limiter sees only the proxy's IP. |
 
 Passkeys are a **second factor** alongside TOTP, never passwordless. The RP ID must
 be the registrable domain the web vault is served from; a passkey enrolled there
@@ -27,9 +28,17 @@ extension uses TOTP (or links out to the vault) — see the web-vault section. I
 RP config is invalid the server still boots with passkeys disabled (TOTP and
 password login are unaffected).
 
-Terminate TLS in front of it (reverse proxy / load balancer). Build a static
-binary: `cd backend && go build -o passwd-server ./cmd/server` (pure-Go SQLite, no
-cgo). Back up the DB file; it holds only ciphertext + verifiers.
+Terminate TLS in front of it (reverse proxy / load balancer). When you do, set
+`PASSWD_TRUSTED_PROXIES` to the proxy's IP(s) so the per-IP rate limiter keys off
+the real client IP from `X-Forwarded-For` (it is trusted *only* from those peers,
+since the header is otherwise spoofable). The per-account login lockout is the
+primary brute-force defense and works regardless.
+
+Build a static binary: `cd backend && go build -o passwd-server ./cmd/server`
+(pure-Go SQLite, no cgo). Back up the DB file; it holds only ciphertext and
+verifiers. TOTP secrets are additionally encrypted at rest (AES-256-GCM under a key
+derived from `PASSWD_IDENTIFIER_PEPPER`), so a stolen DB or backup alone — without
+that secret — cannot read enrolled second-factor secrets.
 
 ### Docker (compose)
 

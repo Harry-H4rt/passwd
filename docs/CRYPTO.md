@@ -181,6 +181,8 @@ Recovery-Protected User Key ── uploaded
   unknown identifiers / accounts without recovery, so it doesn't reveal whether an
   account exists or has recovery enabled. The complete step shares the per-account
   lockout with login.
+- **Session revocation:** completing recovery revokes every existing refresh token
+  for the account, so a session stolen before the reset cannot outlive it.
 - **Tradeoff:** the recovery code is an account-level escape hatch that bypasses
   any TOTP/passkey second factor, so it must be guarded as carefully as the master
   password. The UI shows it exactly once and warns accordingly.
@@ -194,16 +196,18 @@ per-recipient public-key crypto) is future work, tracked in the roadmap.
   server operator, stolen at-rest backups.
 - **Partially mitigated:** compromised client device (mitigate with auto-lock,
   memory hygiene), phishing (mitigate with extension domain-matching for
-  autofill).
+  autofill), offline brute force of a stolen backup or `.passwd` desktop vault
+  (mitigate with Argon2id and a minimum master-password policy enforced by every
+  client — see `@passwd/crypto` `masterPasswordIssue`).
 - **Out of scope (for now):** a fully compromised browser/OS with a keylogger.
 
 ## Open decisions / TODO before any audit
 
 - [x] Known-answer test vectors for every primitive, cross-checked TS↔Go
       (`docs/test-vectors.json`).
-- [~] "Master Password Hash" derivation implemented (1 PBKDF2 pass over the master
-      key, salted by the password). **Still to freeze:** add an explicit domain-
-      separation string before audit.
+- [x] "Master Password Hash" derivation frozen: 1 PBKDF2 pass over the master key,
+      salted by a domain-separated value (`passwd.master-password-hash.v1:` +
+      password). Cross-checked TS↔Go against `docs/test-vectors.json`.
 - [ ] Decide per-item keys vs. single User Key (Bitwarden uses per-item).
 - [ ] Account/key rotation flow (re-encrypt-all on password change).
 - [x] 2FA: TOTP implemented (server-verified). Note: the TOTP secret is held

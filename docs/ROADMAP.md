@@ -87,8 +87,10 @@ runnable and tested. **Security review gates ship before real user data.**
       is a single portable encrypted file (`clients/apps/desktop`, reusing
       `@passwd/crypto`). Linux AppImage + .deb build and run portably (e.g. from a
       USB stick). The site's Download button now points at GitHub Releases
-      (`PUBLIC_RELEASES_URL`). Remaining: cross-platform **signed** installers
-      (mac notarization, Windows signing).
+      (`PUBLIC_RELEASES_URL`), fed by a cross-platform release workflow
+      (`.github/workflows/desktop-release.yml`: Linux + macOS arm/Intel +
+      Windows). Remaining: **signing** the bundles (mac notarization, Windows
+      code signing) once certs are available.
 - [ ] Extension store submissions (Chrome Web Store, AMO)
 - [x] Self-host docs + Docker (backend Dockerfile + docker-compose); signed
       release binaries still TODO

@@ -111,7 +111,11 @@ runnable and tested. **Security review gates ship before real user data.**
       mirroring SQLite and sharing the cross-implementation contract tests. Selected
       by a `postgres://` URL in `PASSWD_DB`. (Schema is created on boot; richer
       migrations come with the multi-tenant work.)
-- [ ] Organizations/teams + collection sharing (public-key crypto per org)
+- [~] Sharing. **1:1 item sharing shipped:** each user has an RSA-OAEP keypair
+      (public key uploaded, private key wrapped by the User Key); an item is shared
+      by encrypting it under a fresh key wrapped to the recipient's public key. Web
+      vault has a "Share" action + "Shared with me" view. Remaining: organizations /
+      teams + collection sharing (org keypair, role-based access).
 - [ ] Billing, multi-tenant isolation, admin console
 - [ ] Observability (metrics, tracing), backups, DR
 

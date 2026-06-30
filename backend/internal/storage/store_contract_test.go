@@ -30,7 +30,7 @@ func testStores(t *testing.T) map[string]Store {
 			t.Fatalf("open postgres: %v", err)
 		}
 		if _, err := pg.db.ExecContext(context.Background(),
-			`TRUNCATE users, ciphers, refresh_tokens, webauthn_credentials, audit_events`); err != nil {
+			`TRUNCATE users, ciphers, refresh_tokens, webauthn_credentials, audit_events, shares`); err != nil {
 			t.Fatalf("truncate postgres: %v", err)
 		}
 		t.Cleanup(func() { pg.Close() })
@@ -50,6 +50,7 @@ func TestStoreContract(t *testing.T) {
 				ID: "u1", IdentifierHash: "idh-1",
 				KDF:                    KDFParams{Type: "argon2id", Iterations: 3, MemoryMiB: 64, Parallelism: 4},
 				MasterPasswordVerifier: "verify-1", ProtectedUserKey: "puk-1",
+				PublicKey: "pub-1", ProtectedPrivateKey: "ppk-1",
 				CreatedAt: now, UpdatedAt: now,
 			}
 			if err := st.CreateUser(ctx, u); err != nil {
@@ -63,6 +64,9 @@ func TestStoreContract(t *testing.T) {
 			got, err := st.GetUserByID(ctx, "u1")
 			if err != nil || got.ProtectedUserKey != "puk-1" || got.KDF.MemoryMiB != 64 {
 				t.Fatalf("get user: %+v, %v", got, err)
+			}
+			if got.PublicKey != "pub-1" || got.ProtectedPrivateKey != "ppk-1" {
+				t.Fatalf("keypair round-trip: %+v", got)
 			}
 			if byHash, err := st.GetUserByIdentifierHash(ctx, "idh-1"); err != nil || byHash.ID != "u1" {
 				t.Fatalf("get by identifier hash: %+v, %v", byHash, err)
@@ -154,6 +158,23 @@ func TestStoreContract(t *testing.T) {
 				if _, err := st.GetRefreshToken(ctx, h); !errors.Is(err, ErrNotFound) {
 					t.Fatalf("refresh %s after bulk revoke = %v; want ErrNotFound", h, err)
 				}
+			}
+
+			// --- shares: create, list-for-recipient, owner/recipient delete ---
+			if err := st.CreateShare(ctx, Share{ID: "s1", OwnerUserID: "u1", RecipientUserID: "u2", WrappedKey: "wk", Data: "dt", CreatedAt: now}); err != nil {
+				t.Fatal(err)
+			}
+			if recv, _ := st.ListSharesForRecipient(ctx, "u2"); len(recv) != 1 || recv[0].WrappedKey != "wk" {
+				t.Fatalf("list shares for recipient: %+v", recv)
+			}
+			if owned, _ := st.ListSharesForRecipient(ctx, "u1"); len(owned) != 0 {
+				t.Fatalf("owner should not see it as incoming: %+v", owned)
+			}
+			if err := st.DeleteShare(ctx, "stranger", "s1"); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("delete by stranger = %v; want ErrNotFound", err)
+			}
+			if err := st.DeleteShare(ctx, "u1", "s1"); err != nil { // owner may delete
+				t.Fatalf("owner delete: %v", err)
 			}
 
 			// --- audit log: append, newest-first, per-user isolation ---

@@ -388,9 +388,10 @@ func (s *Server) handleWebAuthnLoginFinish(w http.ResponseWriter, r *http.Reques
 	}
 	s.lockout.reset(idHash)
 	writeJSON(w, http.StatusOK, loginResponse{
-		AccessToken:      tokens.access,
-		RefreshToken:     tokens.refresh,
-		ProtectedUserKey: u.ProtectedUserKey,
-		KDF:              u.KDF,
+		AccessToken:         tokens.access,
+		RefreshToken:        tokens.refresh,
+		ProtectedUserKey:    u.ProtectedUserKey,
+		ProtectedPrivateKey: u.ProtectedPrivateKey,
+		KDF:                 u.KDF,
 	})
 }

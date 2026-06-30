@@ -72,6 +72,9 @@ function toSession(s: StoredSession): Session {
     accessToken: s.accessToken,
     refreshToken: s.refreshToken,
     userKey: b64decode(s.userKeyB64),
+    // The extension is unlock-only and does not handle shared items, so it has no
+    // need for the sharing private key.
+    protectedPrivateKey: "",
   };
 }
 

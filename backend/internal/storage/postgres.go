@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS users (
 	totp_last_counter           BIGINT NOT NULL DEFAULT 0,
 	recovery_protected_user_key TEXT NOT NULL DEFAULT '',
 	recovery_verifier           TEXT NOT NULL DEFAULT '',
+	public_key                  TEXT NOT NULL DEFAULT '',
+	protected_private_key       TEXT NOT NULL DEFAULT '',
 	created_at                  BIGINT NOT NULL,
 	updated_at                  BIGINT NOT NULL
 );
@@ -75,6 +77,15 @@ CREATE TABLE IF NOT EXISTS audit_events (
 	created_at BIGINT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_events(user_id, created_at);
+CREATE TABLE IF NOT EXISTS shares (
+	id                TEXT PRIMARY KEY,
+	owner_user_id     TEXT NOT NULL,
+	recipient_user_id TEXT NOT NULL,
+	wrapped_key       TEXT NOT NULL,
+	data              TEXT NOT NULL,
+	created_at        BIGINT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shares_recipient ON shares(recipient_user_id);
 `
 
 // OpenPostgres opens (and migrates) the database at the given DSN, e.g.
@@ -109,12 +120,14 @@ func (p *Postgres) CreateUser(ctx context.Context, u User) error {
 	_, err := p.db.ExecContext(ctx,
 		`INSERT INTO users (id, identifier_hash, kdf_type, kdf_iterations, kdf_memory_mib,
 			kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled,
-			recovery_protected_user_key, recovery_verifier, created_at, updated_at)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+			recovery_protected_user_key, recovery_verifier, public_key, protected_private_key,
+			created_at, updated_at)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
 		u.ID, u.IdentifierHash, u.KDF.Type, u.KDF.Iterations, u.KDF.MemoryMiB,
 		u.KDF.Parallelism, u.MasterPasswordVerifier, u.ProtectedUserKey,
 		u.TOTPSecret, u.TOTPEnabled,
-		u.RecoveryProtectedUserKey, u.RecoveryVerifier, unix(u.CreatedAt), unix(u.UpdatedAt))
+		u.RecoveryProtectedUserKey, u.RecoveryVerifier, u.PublicKey, u.ProtectedPrivateKey,
+		unix(u.CreatedAt), unix(u.UpdatedAt))
 	if isPGUnique(err) {
 		return ErrConflict
 	}
@@ -127,7 +140,8 @@ func (p *Postgres) scanUser(row *sql.Row) (User, error) {
 	err := row.Scan(&u.ID, &u.IdentifierHash, &u.KDF.Type, &u.KDF.Iterations,
 		&u.KDF.MemoryMiB, &u.KDF.Parallelism, &u.MasterPasswordVerifier,
 		&u.ProtectedUserKey, &u.TOTPSecret, &u.TOTPEnabled, &u.TOTPLastCounter,
-		&u.RecoveryProtectedUserKey, &u.RecoveryVerifier, &created, &updated)
+		&u.RecoveryProtectedUserKey, &u.RecoveryVerifier, &u.PublicKey, &u.ProtectedPrivateKey,
+		&created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -141,7 +155,7 @@ func (p *Postgres) scanUser(row *sql.Row) (User, error) {
 const pgUserCols = `id, identifier_hash, kdf_type, kdf_iterations, kdf_memory_mib,
 	kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled,
 	totp_last_counter, recovery_protected_user_key, recovery_verifier,
-	created_at, updated_at`
+	public_key, protected_private_key, created_at, updated_at`
 
 func (p *Postgres) GetUserByIdentifierHash(ctx context.Context, identifierHash string) (User, error) {
 	return p.scanUser(p.db.QueryRowContext(ctx,
@@ -381,4 +395,46 @@ func (p *Postgres) ListAuditEvents(ctx context.Context, userID string, limit int
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+func (p *Postgres) CreateShare(ctx context.Context, sh Share) error {
+	_, err := p.db.ExecContext(ctx,
+		`INSERT INTO shares (id, owner_user_id, recipient_user_id, wrapped_key, data, created_at)
+		 VALUES ($1,$2,$3,$4,$5,$6)`,
+		sh.ID, sh.OwnerUserID, sh.RecipientUserID, sh.WrappedKey, sh.Data, unix(sh.CreatedAt))
+	if isPGUnique(err) {
+		return ErrConflict
+	}
+	return err
+}
+
+func (p *Postgres) ListSharesForRecipient(ctx context.Context, recipientUserID string) ([]Share, error) {
+	rows, err := p.db.QueryContext(ctx,
+		`SELECT id, owner_user_id, recipient_user_id, wrapped_key, data, created_at
+		 FROM shares WHERE recipient_user_id = $1 ORDER BY created_at DESC, id DESC`, recipientUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]Share, 0)
+	for rows.Next() {
+		var sh Share
+		var created int64
+		if err := rows.Scan(&sh.ID, &sh.OwnerUserID, &sh.RecipientUserID, &sh.WrappedKey, &sh.Data, &created); err != nil {
+			return nil, err
+		}
+		sh.CreatedAt = fromUnix(created)
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+func (p *Postgres) DeleteShare(ctx context.Context, userID, id string) error {
+	res, err := p.db.ExecContext(ctx,
+		`DELETE FROM shares WHERE id = $1 AND (recipient_user_id = $2 OR owner_user_id = $2)`,
+		id, userID)
+	if err != nil {
+		return err
+	}
+	return notFoundIfNoRows(res)
 }

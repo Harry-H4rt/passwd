@@ -33,6 +33,8 @@ CREATE TABLE IF NOT EXISTS users (
 	totp_last_counter  INTEGER NOT NULL DEFAULT 0,
 	recovery_protected_user_key TEXT NOT NULL DEFAULT '',
 	recovery_verifier  TEXT NOT NULL DEFAULT '',
+	public_key         TEXT NOT NULL DEFAULT '',
+	protected_private_key TEXT NOT NULL DEFAULT '',
 	created_at         INTEGER NOT NULL,
 	updated_at         INTEGER NOT NULL
 );
@@ -74,6 +76,15 @@ CREATE TABLE IF NOT EXISTS audit_events (
 	created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_events(user_id, created_at);
+CREATE TABLE IF NOT EXISTS shares (
+	id                TEXT PRIMARY KEY,
+	owner_user_id     TEXT NOT NULL,
+	recipient_user_id TEXT NOT NULL,
+	wrapped_key       TEXT NOT NULL,
+	data              TEXT NOT NULL,
+	created_at        INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_shares_recipient ON shares(recipient_user_id);
 `
 
 // OpenSQLite opens (and migrates) the database at path. Pragmas enable WAL and a
@@ -98,6 +109,8 @@ func OpenSQLite(path string) (*SQLite, error) {
 		`ALTER TABLE users ADD COLUMN recovery_verifier TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE users ADD COLUMN totp_last_counter INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE refresh_tokens ADD COLUMN used INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE users ADD COLUMN public_key TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN protected_private_key TEXT NOT NULL DEFAULT ''`,
 	} {
 		if _, err := db.ExecContext(context.Background(), stmt); err != nil &&
 			!strings.Contains(err.Error(), "duplicate column name") {
@@ -123,12 +136,14 @@ func (s *SQLite) CreateUser(ctx context.Context, u User) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO users (id, identifier_hash, kdf_type, kdf_iterations, kdf_memory_mib,
 			kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled,
-			recovery_protected_user_key, recovery_verifier, created_at, updated_at)
-		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+			recovery_protected_user_key, recovery_verifier, public_key, protected_private_key,
+			created_at, updated_at)
+		 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		u.ID, u.IdentifierHash, u.KDF.Type, u.KDF.Iterations, u.KDF.MemoryMiB,
 		u.KDF.Parallelism, u.MasterPasswordVerifier, u.ProtectedUserKey,
 		u.TOTPSecret, boolToInt(u.TOTPEnabled),
-		u.RecoveryProtectedUserKey, u.RecoveryVerifier, unix(u.CreatedAt), unix(u.UpdatedAt))
+		u.RecoveryProtectedUserKey, u.RecoveryVerifier, u.PublicKey, u.ProtectedPrivateKey,
+		unix(u.CreatedAt), unix(u.UpdatedAt))
 	if isUnique(err) {
 		return ErrConflict
 	}
@@ -142,7 +157,8 @@ func (s *SQLite) scanUser(row *sql.Row) (User, error) {
 	err := row.Scan(&u.ID, &u.IdentifierHash, &u.KDF.Type, &u.KDF.Iterations,
 		&u.KDF.MemoryMiB, &u.KDF.Parallelism, &u.MasterPasswordVerifier,
 		&u.ProtectedUserKey, &u.TOTPSecret, &totpEnabled, &u.TOTPLastCounter,
-		&u.RecoveryProtectedUserKey, &u.RecoveryVerifier, &created, &updated)
+		&u.RecoveryProtectedUserKey, &u.RecoveryVerifier, &u.PublicKey, &u.ProtectedPrivateKey,
+		&created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
 		return User{}, ErrNotFound
 	}
@@ -157,7 +173,7 @@ func (s *SQLite) scanUser(row *sql.Row) (User, error) {
 const userCols = `id, identifier_hash, kdf_type, kdf_iterations, kdf_memory_mib,
 	kdf_parallelism, verifier, protected_user_key, totp_secret, totp_enabled,
 	totp_last_counter, recovery_protected_user_key, recovery_verifier,
-	created_at, updated_at`
+	public_key, protected_private_key, created_at, updated_at`
 
 func (s *SQLite) GetUserByIdentifierHash(ctx context.Context, identifierHash string) (User, error) {
 	return s.scanUser(s.db.QueryRowContext(ctx,
@@ -405,6 +421,48 @@ func (s *SQLite) ListAuditEvents(ctx context.Context, userID string, limit int) 
 		out = append(out, e)
 	}
 	return out, rows.Err()
+}
+
+func (s *SQLite) CreateShare(ctx context.Context, sh Share) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO shares (id, owner_user_id, recipient_user_id, wrapped_key, data, created_at)
+		 VALUES (?,?,?,?,?,?)`,
+		sh.ID, sh.OwnerUserID, sh.RecipientUserID, sh.WrappedKey, sh.Data, unix(sh.CreatedAt))
+	if isUnique(err) {
+		return ErrConflict
+	}
+	return err
+}
+
+func (s *SQLite) ListSharesForRecipient(ctx context.Context, recipientUserID string) ([]Share, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, owner_user_id, recipient_user_id, wrapped_key, data, created_at
+		 FROM shares WHERE recipient_user_id = ? ORDER BY created_at DESC, id DESC`, recipientUserID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]Share, 0)
+	for rows.Next() {
+		var sh Share
+		var created int64
+		if err := rows.Scan(&sh.ID, &sh.OwnerUserID, &sh.RecipientUserID, &sh.WrappedKey, &sh.Data, &created); err != nil {
+			return nil, err
+		}
+		sh.CreatedAt = fromUnix(created)
+		out = append(out, sh)
+	}
+	return out, rows.Err()
+}
+
+func (s *SQLite) DeleteShare(ctx context.Context, userID, id string) error {
+	res, err := s.db.ExecContext(ctx,
+		`DELETE FROM shares WHERE id = ? AND (recipient_user_id = ? OR owner_user_id = ?)`,
+		id, userID, userID)
+	if err != nil {
+		return err
+	}
+	return notFoundIfNoRows(res)
 }
 
 func notFoundIfNoRows(res sql.Result) error {

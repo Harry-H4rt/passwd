@@ -38,6 +38,11 @@ type User struct {
 	MasterPasswordVerifier string
 	// ProtectedUserKey is the User Key wrapped by the stretched master key (EncString).
 	ProtectedUserKey string
+	// PublicKey is the user's sharing public key (base64 SPKI), uploaded at
+	// registration so others can encrypt shared items to them. ProtectedPrivateKey
+	// is the matching private key wrapped by the User Key; the server can't read it.
+	PublicKey           string
+	ProtectedPrivateKey string
 	// RecoveryProtectedUserKey is the same User Key independently wrapped by a key
 	// derived from the user's recovery code (EncString). Empty until the user opts
 	// in. Lets a user who forgot the master password recover without a server reset.
@@ -101,6 +106,18 @@ type AuditEvent struct {
 	CreatedAt time.Time
 }
 
+// Share is one item shared from one user to another. The payload is opaque to the
+// server: WrappedKey is the item key encrypted to the recipient's public key, and
+// Data is the item ciphertext under that key.
+type Share struct {
+	ID              string
+	OwnerUserID     string
+	RecipientUserID string
+	WrappedKey      string
+	Data            string
+	CreatedAt       time.Time
+}
+
 // RefreshToken is a persisted, rotatable session credential. Only a hash of the
 // opaque token is stored, so a DB leak cannot be used to mint sessions.
 type RefreshToken struct {
@@ -158,6 +175,13 @@ type Store interface {
 	AppendAuditEvent(ctx context.Context, e AuditEvent) error
 	// ListAuditEvents returns a user's events, newest first, capped at limit.
 	ListAuditEvents(ctx context.Context, userID string, limit int) ([]AuditEvent, error)
+
+	// CreateShare stores a shared item. ListSharesForRecipient returns shares
+	// addressed to a user (newest first). DeleteShare removes a share if the caller
+	// is its owner or recipient.
+	CreateShare(ctx context.Context, s Share) error
+	ListSharesForRecipient(ctx context.Context, recipientUserID string) ([]Share, error)
+	DeleteShare(ctx context.Context, userID, id string) error
 
 	Close() error
 }

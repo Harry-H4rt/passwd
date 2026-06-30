@@ -14,6 +14,7 @@ import {
 } from "./primitives.js";
 import { EncType, parseEncString, serializeEncString } from "./encstring.js";
 import { generateAccountId, normalizeIdentifier } from "./identifier.js";
+import { generateUserKeypair } from "./sharing.js";
 
 const USER_KEY_BYTES = 64; // 32 for AES-GCM + 32 reserved (per-item / CBC-HMAC compat)
 
@@ -152,6 +153,10 @@ export interface RegistrationBundle {
   kdf: KdfParams;
   masterPasswordHash: string;
   protectedUserKey: string;
+  // Sharing keypair: public key (base64 SPKI) and the private key wrapped by the
+  // User Key. Generated at registration so items can be shared to this user.
+  publicKey: string;
+  protectedPrivateKey: string;
 }
 
 // Build everything the server needs at registration, plus the in-memory user key.
@@ -165,8 +170,16 @@ export async function buildRegistration(
   const userKey = generateUserKey();
   const protectedUserKey = await wrapUserKey(stretched, userKey);
   const masterPasswordHash = await deriveMasterPasswordHash(masterKey, masterPassword);
+  const keypair = await generateUserKeypair(userKey);
   return {
-    bundle: { identifier: normalizeIdentifier(identifier), kdf: params, masterPasswordHash, protectedUserKey },
+    bundle: {
+      identifier: normalizeIdentifier(identifier),
+      kdf: params,
+      masterPasswordHash,
+      protectedUserKey,
+      publicKey: keypair.publicKey,
+      protectedPrivateKey: keypair.protectedPrivateKey,
+    },
     userKey,
   };
 }

@@ -195,6 +195,30 @@ Recovery-Protected User Key ── uploaded
 Delegated **emergency access** (granting a trusted contact time-delayed access via
 per-recipient public-key crypto) is future work, tracked in the roadmap.
 
+## Item sharing (1:1)
+
+Sharing uses public-key crypto so the server can route a shared item without ever
+reading it.
+
+- **Per-user keypair:** at registration each user generates an **RSA-OAEP 2048**
+  keypair client-side. The public key is uploaded (anyone may encrypt to it); the
+  private key is exported as PKCS#8, wrapped with the user's symmetric User Key, and
+  uploaded as `protectedPrivateKey`. Only the unlocked user can recover it; login
+  returns it alongside the Protected User Key.
+- **Sharing an item:** the sender fetches the recipient's public key
+  (`/api/users/public-key`), encrypts the item under a fresh random AES-256-GCM key,
+  RSA-OAEP-encrypts that key to the recipient's public key, and uploads
+  `{wrappedKey, data}`. Both are opaque to the server.
+- **Receiving:** the recipient lists shares addressed to them, unwraps the item key
+  with their private key, and decrypts the item locally.
+- **Privacy:** the server stores shares against the random recipient account id and
+  never learns either party's plaintext identifier. The public-key lookup is an
+  auth-only, rate-limited endpoint — a deliberate existence check that sharing
+  inherently needs.
+
+Organization/team sharing (a shared org keypair and collections) builds on this and
+is tracked in the roadmap.
+
 ## Threat model (summary)
 
 - **In scope:** server compromise, database exfiltration, network MITM, malicious

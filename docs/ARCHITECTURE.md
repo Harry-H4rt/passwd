@@ -123,6 +123,15 @@ the server blinds it to an HMAC and never stores it in the clear.
 | `PUT`  | `/api/ciphers/{id}` | bearer | update an opaque encrypted item |
 | `DELETE` | `/api/ciphers/{id}` | bearer | delete an item |
 
+### Item sharing (1:1)
+
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET`  | `/api/users/public-key?identifier=…` | bearer | a recipient's sharing public key (by identifier) |
+| `POST` | `/api/shares` | bearer | share an item: `{recipientIdentifier, wrappedKey, data}` (both opaque) |
+| `GET`  | `/api/shares` | bearer | items shared **to** the caller (the item key is wrapped to their public key) |
+| `DELETE` | `/api/shares/{id}` | bearer | remove a share (owner or recipient) |
+
 > Tokens: stateless **HS256 JWT** access tokens (15 min) implemented with the Go
 > standard library; opaque **refresh tokens** (30 d) stored hashed and rotated on
 > every use. Login enforces a per-account lockout and shares it with the recovery

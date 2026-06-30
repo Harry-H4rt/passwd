@@ -111,6 +111,12 @@ func (s *Server) Routes() http.Handler {
 	// Security audit log — the caller's own recent events.
 	mux.Handle("GET /api/audit", s.requireAuth(http.HandlerFunc(s.handleAuditLog)))
 
+	// 1:1 item sharing.
+	mux.Handle("GET /api/users/public-key", s.requireAuth(http.HandlerFunc(s.handleLookupPublicKey)))
+	mux.Handle("POST /api/shares", s.requireAuth(http.HandlerFunc(s.handleCreateShare)))
+	mux.Handle("GET /api/shares", s.requireAuth(http.HandlerFunc(s.handleListShares)))
+	mux.Handle("DELETE /api/shares/{id}", s.requireAuth(http.HandlerFunc(s.handleDeleteShare)))
+
 	// Vault sync — requires a valid access token.
 	mux.Handle("GET /api/sync", s.requireAuth(http.HandlerFunc(s.handleSync)))
 	mux.Handle("POST /api/ciphers", s.requireAuth(http.HandlerFunc(s.handleCreateCipher)))

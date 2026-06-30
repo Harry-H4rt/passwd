@@ -1,7 +1,7 @@
 ---
 import Base from "../layouts/Base.astro";
 import Icon from "../components/Icon.astro";
-import { VAULT_URL, GITHUB_URL } from "../config";
+import { VAULT_URL, GITHUB_URL, RELEASES_URL } from "../config";
 
 const faqs = [
   ["Do I need to give an email?", "No. You can create an account with a generated passphrase: no email, phone, or personal details. Email is an optional convenience, and even then it's only ever stored as a blinded hash."],
@@ -54,8 +54,8 @@ const faqs = [
         <div class="card">
           <span class="icon"><Icon name="monitor" size={22} /></span>
           <h3>Desktop app</h3>
-          <p>A native app for Windows, macOS, and Linux, in the works.</p>
-          <p style="margin-top:14px;"><a class="btn btn-ghost" aria-disabled="true" href="#download">Coming soon</a></p>
+          <p>A standalone, offline vault for Linux today (AppImage/.deb); signed macOS and Windows builds coming soon.</p>
+          <p style="margin-top:14px;"><a class="btn btn-primary" href={RELEASES_URL}>Download</a></p>
         </div>
       </div>
       <p style="text-align:center;margin-top:26px;">

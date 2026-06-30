@@ -114,6 +114,7 @@ func (s *Server) handleTOTPEnable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not enable two-factor")
 		return
 	}
+	s.audit(r.Context(), userID, evtTOTPEnable, "")
 	writeJSON(w, http.StatusOK, map[string]bool{"enabled": true})
 }
 
@@ -142,5 +143,6 @@ func (s *Server) handleTOTPDisable(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not disable two-factor")
 		return
 	}
+	s.audit(r.Context(), userID, evtTOTPDisable, "")
 	writeJSON(w, http.StatusOK, map[string]bool{"enabled": false})
 }

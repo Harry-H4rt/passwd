@@ -188,6 +188,7 @@ func (s *Server) handleWebAuthnDelete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "could not delete passkey")
 		return
 	}
+	s.audit(r.Context(), userID, evtPasskeyRemove, "")
 	writeJSON(w, http.StatusOK, map[string]bool{"deleted": true})
 }
 
@@ -267,6 +268,7 @@ func (s *Server) handleWebAuthnRegisterFinish(w http.ResponseWriter, r *http.Req
 		writeError(w, http.StatusInternalServerError, "could not save passkey")
 		return
 	}
+	s.audit(r.Context(), userID, evtPasskeyEnroll, "")
 	writeJSON(w, http.StatusOK, map[string]any{"id": rec.ID, "name": rec.Name})
 }
 

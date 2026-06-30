@@ -66,6 +66,14 @@ CREATE TABLE IF NOT EXISTS webauthn_credentials (
 	updated_at       INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_webauthn_user ON webauthn_credentials(user_id);
+CREATE TABLE IF NOT EXISTS audit_events (
+	id         TEXT PRIMARY KEY,
+	user_id    TEXT NOT NULL DEFAULT '',
+	event      TEXT NOT NULL,
+	detail     TEXT NOT NULL DEFAULT '',
+	created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_events(user_id, created_at);
 `
 
 // OpenSQLite opens (and migrates) the database at path. Pragmas enable WAL and a
@@ -369,6 +377,34 @@ func (s *SQLite) MarkRefreshTokenUsed(ctx context.Context, tokenHash string) err
 func (s *SQLite) DeleteRefreshTokensForUser(ctx context.Context, userID string) error {
 	_, err := s.db.ExecContext(ctx, `DELETE FROM refresh_tokens WHERE user_id = ?`, userID)
 	return err
+}
+
+func (s *SQLite) AppendAuditEvent(ctx context.Context, e AuditEvent) error {
+	_, err := s.db.ExecContext(ctx,
+		`INSERT INTO audit_events (id, user_id, event, detail, created_at) VALUES (?,?,?,?,?)`,
+		e.ID, e.UserID, e.Event, e.Detail, unix(e.CreatedAt))
+	return err
+}
+
+func (s *SQLite) ListAuditEvents(ctx context.Context, userID string, limit int) ([]AuditEvent, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT id, user_id, event, detail, created_at FROM audit_events
+		 WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?`, userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]AuditEvent, 0)
+	for rows.Next() {
+		var e AuditEvent
+		var created int64
+		if err := rows.Scan(&e.ID, &e.UserID, &e.Event, &e.Detail, &created); err != nil {
+			return nil, err
+		}
+		e.CreatedAt = fromUnix(created)
+		out = append(out, e)
+	}
+	return out, rows.Err()
 }
 
 func notFoundIfNoRows(res sql.Result) error {

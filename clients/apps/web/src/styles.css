@@ -493,6 +493,40 @@ button {
   line-height: 1.6;
   resize: vertical;
 }
+/* Account activity (audit log) list. */
+.activity-list {
+  list-style: none;
+  margin: 12px 0;
+  padding: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+.activity-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 9px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.activity-row:last-child {
+  border-bottom: none;
+}
+.activity-label {
+  font-size: 14px;
+}
+.activity-label.danger {
+  color: #c0392b;
+}
+:root[data-theme="dark"] .activity-label.danger {
+  color: #ff6b5e;
+}
+.activity-time {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 /* Inline text-button (e.g. "Forgot your master password?"). */
 .linklike {
   align-self: flex-start;

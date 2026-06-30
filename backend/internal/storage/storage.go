@@ -89,6 +89,18 @@ type WebAuthnCredential struct {
 	UpdatedAt       time.Time
 }
 
+// AuditEvent is one entry in the append-only security log. To preserve the
+// zero-knowledge/no-PII stance it records the internal random account id and an
+// event type only — never the plaintext identifier, and (by default) no IP. Detail
+// is a short, non-PII qualifier such as "method=totp".
+type AuditEvent struct {
+	ID        string
+	UserID    string // random account id; empty when not attributable to an account
+	Event     string // e.g. "login.success", "login.failure", "cipher.create"
+	Detail    string // optional, non-PII
+	CreatedAt time.Time
+}
+
 // RefreshToken is a persisted, rotatable session credential. Only a hash of the
 // opaque token is stored, so a DB leak cannot be used to mint sessions.
 type RefreshToken struct {
@@ -141,6 +153,11 @@ type Store interface {
 	// DeleteRefreshTokensForUser revokes every refresh token for a user. Used on
 	// detected token reuse and on master-password rotation (recovery).
 	DeleteRefreshTokensForUser(ctx context.Context, userID string) error
+
+	// AppendAuditEvent records one entry in the append-only security log.
+	AppendAuditEvent(ctx context.Context, e AuditEvent) error
+	// ListAuditEvents returns a user's events, newest first, capped at limit.
+	ListAuditEvents(ctx context.Context, userID string, limit int) ([]AuditEvent, error)
 
 	Close() error
 }

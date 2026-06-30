@@ -116,6 +116,7 @@ the server blinds it to an HMAC and never stores it in the clear.
 
 | Method | Path | Auth | Purpose |
 |---|---|---|---|
+| `GET`  | `/api/audit` | bearer | the caller's recent security events (audit log) |
 | `GET`  | `/api/sync` | bearer | full encrypted vault snapshot (`{ciphers: [...]}`) |
 | `POST` | `/api/ciphers` | bearer | create an opaque encrypted item |
 | `PUT`  | `/api/ciphers/{id}` | bearer | update an opaque encrypted item |

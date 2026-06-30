@@ -18,6 +18,8 @@ import {
   getRecoveryStatus,
   enableRecovery,
   disableRecovery,
+  getActivity,
+  type ActivityEvent,
   type WebAuthnCredentialSummary,
 } from "@passwd/api-client";
 import { Icon } from "./components/Icon";
@@ -41,6 +43,7 @@ export function VaultScreen(props: {
   const [show2fa, setShow2fa] = useState(false);
   const [showPasskeys, setShowPasskeys] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
+  const [showActivity, setShowActivity] = useState(false);
   const [showData, setShowData] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -144,6 +147,9 @@ export function VaultScreen(props: {
           <button className="nav-item" onClick={() => setShowRecovery(true)}>
             <Icon name="key" size={16} /> Recovery code
           </button>
+          <button className="nav-item" onClick={() => setShowActivity(true)}>
+            <Icon name="clock" size={16} /> Activity
+          </button>
         </nav>
         <div className="sidebar-footer">
           <button
@@ -238,6 +244,7 @@ export function VaultScreen(props: {
       {show2fa && <TwoFactor session={session} onClose={() => setShow2fa(false)} />}
       {showPasskeys && <Passkeys session={session} onClose={() => setShowPasskeys(false)} />}
       {showRecovery && <RecoveryCode session={session} onClose={() => setShowRecovery(false)} />}
+      {showActivity && <Activity session={session} onClose={() => setShowActivity(false)} />}
       {showData && (
         <ImportExport
           session={session}
@@ -657,6 +664,65 @@ function TwoFactor(props: { session: Session; onClose: () => void }) {
             </div>
           </>
         )}
+      </div>
+    </div>
+  );
+}
+
+const ACTIVITY_LABELS: Record<string, string> = {
+  "account.register": "Account created",
+  "login.success": "Signed in",
+  "login.failure": "Failed sign-in attempt",
+  "totp.enable": "Two-factor (TOTP) enabled",
+  "totp.disable": "Two-factor (TOTP) disabled",
+  "passkey.enroll": "Passkey added",
+  "passkey.remove": "Passkey removed",
+  "recovery.enable": "Recovery code set up",
+  "recovery.disable": "Recovery code removed",
+  "recovery.complete": "Account recovered",
+  "token.reuse_detected": "Session token reuse detected",
+  "cipher.create": "Item added",
+  "cipher.update": "Item edited",
+  "cipher.delete": "Item deleted",
+};
+
+function Activity(props: { session: Session; onClose: () => void }) {
+  const [events, setEvents] = useState<ActivityEvent[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getActivity(props.session)
+      .then(setEvents)
+      .catch((e) => setError(errMsg(e)));
+  }, [props.session]);
+
+  return (
+    <div className="modal-backdrop" onClick={props.onClose}>
+      <div className="card modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Account activity</h2>
+        <p className="muted">Recent security events on your account, newest first.</p>
+        {error && <div className="error">{error}</div>}
+        {!events ? (
+          <p className="muted">Loading...</p>
+        ) : events.length === 0 ? (
+          <p className="muted">No activity yet.</p>
+        ) : (
+          <ul className="activity-list">
+            {events.map((e, i) => (
+              <li key={i} className="activity-row">
+                <span className={"activity-label" + (e.event.endsWith(".failure") || e.event === "token.reuse_detected" ? " danger" : "")}>
+                  {ACTIVITY_LABELS[e.event] ?? e.event}
+                </span>
+                <span className="activity-time">{new Date(e.createdAt).toLocaleString()}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <div className="row end">
+          <button className="ghost" onClick={props.onClose}>
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

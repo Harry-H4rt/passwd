@@ -86,8 +86,9 @@ runnable and tested. **Security review gates ship before real user data.**
       vault** rather than a sync-client wrapper — no backend, no network; the vault
       is a single portable encrypted file (`clients/apps/desktop`, reusing
       `@passwd/crypto`). Linux AppImage + .deb build and run portably (e.g. from a
-      USB stick). Remaining: cross-platform **signed** installers (mac notarization,
-      Windows signing) + wiring the site's Download button.
+      USB stick). The site's Download button now points at GitHub Releases
+      (`PUBLIC_RELEASES_URL`). Remaining: cross-platform **signed** installers
+      (mac notarization, Windows signing).
 - [ ] Extension store submissions (Chrome Web Store, AMO)
 - [x] Self-host docs + Docker (backend Dockerfile + docker-compose); signed
       release binaries still TODO

@@ -109,7 +109,35 @@ time via `VITE_API_BASE` (see `apps/web/.env.example`):
 
 `cd site && npm run build` → static files in `site/dist`. The "Open vault" /
 "Create free vault" buttons and repo links are set at build time via
-`PUBLIC_VAULT_URL` and `PUBLIC_GITHUB_URL` (see `site/.env.example`).
+`PUBLIC_VAULT_URL` and `PUBLIC_GITHUB_URL` (see `site/.env.example`). The
+desktop **Download** button points at `PUBLIC_RELEASES_URL` (defaults to
+`$PUBLIC_GITHUB_URL/releases/latest`), i.e. the releases produced below.
+
+## Releasing the desktop app
+
+The standalone Tauri vault (`clients/apps/desktop`) is built and published by
+`.github/workflows/desktop-release.yml`. It runs a matrix on Linux, macOS
+(Apple silicon + Intel) and Windows, then attaches the bundles to a GitHub
+Release.
+
+- **Cut a release:** bump the version in `clients/apps/desktop/src-tauri/tauri.conf.json`
+  (and `package.json`), then push a tag `vX.Y.Z`. The workflow creates a draft
+  release `passwd vX.Y.Z` with the per-platform assets (Linux AppImage/.deb,
+  macOS `.dmg`, Windows `.msi`/NSIS). Review and publish it.
+- **Dry run:** trigger the workflow manually (`workflow_dispatch`) to build a
+  draft release for the current version without tagging.
+
+### Signing (set as repo secrets when available)
+
+Builds are **unsigned** until these are present; the workflow picks them up
+automatically once set.
+
+- **macOS notarization:** `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`,
+  `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID`
+  (Developer ID Application cert + an app-specific password / API key).
+- **Windows code signing:** provide a code-signing certificate and configure
+  `bundle.windows` in `tauri.conf.json` (e.g. `signCommand` / Azure Trusted
+  Signing) so `signtool` runs during the bundle step.
 
 ## Publishing the browser extension
 

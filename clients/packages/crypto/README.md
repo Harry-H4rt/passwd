@@ -9,7 +9,7 @@ implements the key hierarchy and encrypted-blob format specified in
 
 ```ts
 import {
-  DEFAULT_KDF, buildRegistration, unlock, encryptItem, decryptItem,
+  DEFAULT_KDF, buildRegistration, unlock, encryptItemKeyed, decryptItemKeyed,
   enrollRecovery, completeRecovery,
 } from "@passwd/crypto";
 
@@ -17,12 +17,15 @@ import {
 const { bundle, userKey } = await buildRegistration(identifier, masterPassword, DEFAULT_KDF);
 // POST `bundle` -> /api/accounts/register   (server sees only ciphertext + an auth hash)
 
-// Encrypt a vault item locally before upload.
-const cipher = await encryptItem(userKey, JSON.stringify(item)); // -> EncString
+// Encrypt a synced vault item locally before upload. Each item is encrypted under
+// its own random key, wrapped by the User Key (per-item keys); the result is an
+// opaque JSON container. (encryptItem/decryptItem remain for the offline whole-file
+// vault and as low-level primitives.)
+const cipher = await encryptItemKeyed(userKey, JSON.stringify(item));
 
 // Sign in / unlock on any device: recover the User Key from identifier + password.
 const { userKey, masterPasswordHash } = await unlock(identifier, masterPassword, kdf, protectedUserKey);
-const item = JSON.parse(await decryptItem(userKey, cipher));
+const item = JSON.parse(await decryptItemKeyed(userKey, cipher));
 
 // Account recovery: enroll a recovery code while unlocked, and later use it to
 // reset the master password without the server being able to read anything.

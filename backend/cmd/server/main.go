@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,12 +19,16 @@ import (
 )
 
 // openStore selects the persistence backend from config. An empty or "memory"
-// PASSWD_DB uses the in-memory store (tests/ephemeral); otherwise SQLite at the
-// given path (directories created as needed).
+// PASSWD_DB uses the in-memory store (tests/ephemeral); a postgres:// URL uses
+// PostgreSQL; otherwise SQLite at the given path (directories created as needed).
 func openStore(cfg config.Config, logger *slog.Logger) (storage.Store, error) {
 	if cfg.DBPath == "" || cfg.DBPath == "memory" {
 		logger.Warn("using in-memory store (not durable); set PASSWD_DB for persistence")
 		return storage.NewMemory(), nil
+	}
+	if strings.HasPrefix(cfg.DBPath, "postgres://") || strings.HasPrefix(cfg.DBPath, "postgresql://") {
+		logger.Info("using PostgreSQL store")
+		return storage.OpenPostgres(cfg.DBPath)
 	}
 	if dir := filepath.Dir(cfg.DBPath); dir != "" && dir != "." {
 		if err := os.MkdirAll(dir, 0o700); err != nil {

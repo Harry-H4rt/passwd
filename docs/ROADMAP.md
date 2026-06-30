@@ -107,7 +107,10 @@ runnable and tested. **Security review gates ship before real user data.**
 
 ## Phase 7 — SaaS evolution
 
-- [ ] Postgres storage impl + migrations
+- [x] Postgres storage impl: a `storage.Store` backed by PostgreSQL (`lib/pq`),
+      mirroring SQLite and sharing the cross-implementation contract tests. Selected
+      by a `postgres://` URL in `PASSWD_DB`. (Schema is created on boot; richer
+      migrations come with the multi-tenant work.)
 - [ ] Organizations/teams + collection sharing (public-key crypto per org)
 - [ ] Billing, multi-tenant isolation, admin console
 - [ ] Observability (metrics, tracing), backups, DR

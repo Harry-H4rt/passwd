@@ -13,7 +13,7 @@ dev defaults:
 | `PASSWD_ENV=production` | enables HSTS; enforces non-default secrets |
 | `PASSWD_JWT_SECRET` | `openssl rand -hex 32` (or `PASSWD_JWT_SECRET_FILE`) |
 | `PASSWD_IDENTIFIER_PEPPER` | `openssl rand -hex 32` (or `..._FILE`) — **never change it** (rotating orphans all accounts) |
-| `PASSWD_DB` | persistent path, e.g. `/var/lib/passwd/passwd.db` |
+| `PASSWD_DB` | SQLite file path, e.g. `/var/lib/passwd/passwd.db`, **or** a `postgres://…` URL to use PostgreSQL |
 | `PASSWD_ALLOWED_ORIGINS` | your web-vault origin, e.g. `https://vault.example.com` |
 | `PASSWD_ADDR` | listen address |
 | `PASSWD_WEBAUTHN_RP_ID` | passkey Relying Party ID: web-vault host only, e.g. `vault.example.com` — set once, keep **stable** (passkeys bind to it) |
@@ -39,6 +39,15 @@ Build a static binary: `cd backend && go build -o passwd-server ./cmd/server`
 verifiers. TOTP secrets are additionally encrypted at rest (AES-256-GCM under a key
 derived from `PASSWD_IDENTIFIER_PEPPER`), so a stolen DB or backup alone — without
 that secret — cannot read enrolled second-factor secrets.
+
+### Storage backend (SQLite or PostgreSQL)
+
+`PASSWD_DB` selects the backend: a filesystem path uses **SQLite** (the simple
+single-binary default); a `postgres://user:pass@host:5432/passwd?sslmode=require`
+URL uses **PostgreSQL** (for larger / multi-tenant deployments). Both implement the
+same `storage.Store` interface and pass the same contract tests; the schema is
+created automatically on first boot. Use `sslmode=require` (or stricter) for any
+non-local Postgres.
 
 ### Docker (compose)
 

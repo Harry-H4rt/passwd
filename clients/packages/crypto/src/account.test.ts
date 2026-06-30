@@ -8,6 +8,8 @@ import {
   enrollRecovery,
   completeRecovery,
   deriveRecoveryKeys,
+  encryptItemKeyed,
+  decryptItemKeyed,
 } from "./account.js";
 import { generateAccountId, normalizeIdentifier } from "./identifier.js";
 import { BIP39_WORDLIST } from "./wordlist.js";
@@ -62,6 +64,37 @@ test("generateAccountId produces valid, varied BIP39 passphrases", async () => {
   assert.equal(words.length, 12);
   for (const w of words) assert.ok(wordset.has(w), `"${w}" not in wordlist`);
   assert.notEqual(generateAccountId(12), generateAccountId(12)); // randomized
+});
+
+test("per-item-keyed item round-trips and uses a fresh key each time", async () => {
+  const { userKey } = await buildRegistration(EMAIL, PASSWORD, KDF);
+  const secret = JSON.stringify({ site: "github.com", password: "hunter2" });
+
+  const a = await encryptItemKeyed(userKey, secret);
+  const b = await encryptItemKeyed(userKey, secret);
+  // Each item is wrapped under its own random key, so identical plaintext yields
+  // different containers (different wrapped key and ciphertext).
+  assert.notEqual(a, b);
+  assert.equal(await decryptItemKeyed(userKey, a), secret);
+  assert.equal(await decryptItemKeyed(userKey, b), secret);
+
+  const container = JSON.parse(a);
+  assert.equal(container.v, 2);
+  assert.ok(container.key.startsWith("1.") && container.data.startsWith("1."));
+});
+
+test("per-item: tampering with the wrapped key or data is rejected", async () => {
+  const { userKey } = await buildRegistration(EMAIL, PASSWORD, KDF);
+  const c = JSON.parse(await encryptItemKeyed(userKey, "secret"));
+  const tamper = (s: string) => s.slice(0, -2) + (s.endsWith("=") ? "A=" : "AA");
+  await assert.rejects(decryptItemKeyed(userKey, JSON.stringify({ ...c, data: tamper(c.data) })));
+  await assert.rejects(decryptItemKeyed(userKey, JSON.stringify({ ...c, key: tamper(c.key) })));
+});
+
+test("decryptItemKeyed still reads a legacy single-key item", async () => {
+  const { userKey } = await buildRegistration(EMAIL, PASSWORD, KDF);
+  const legacy = await encryptItem(userKey, "legacy secret"); // bare EncString
+  assert.equal(await decryptItemKeyed(userKey, legacy), "legacy secret");
 });
 
 test("recovery code recovers the vault under a new master password", async () => {

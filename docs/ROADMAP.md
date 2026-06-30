@@ -20,7 +20,9 @@ runnable and tested. **Security review gates ship before real user data.**
 - [x] Identifier-agnostic crypto + BIP39 `generateAccountId()`
 - [x] master-password-hash derivation documented (still a Phase-1 "frozen pending
       audit" item)
-- [ ] Decide single User Key vs. per-item keys (still open)
+- [x] Single User Key vs. per-item keys: **per-item keys** adopted for synced items
+      (own random key per item, wrapped by the User Key) — enables sharing and
+      User-Key rotation. Offline desktop vault keeps the whole-file model.
 
 ## Phase 2 — Backend MVP (single-tenant) ✅
 

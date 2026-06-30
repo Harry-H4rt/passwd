@@ -86,9 +86,14 @@ SERVER STORES: Protected (wrapped) User Key, all item ciphertext,
    (encrypted) with the Stretched Master Key and the result — the **Protected
    User Key** — is uploaded. On every login the client downloads it and unwraps
    it locally.
-5. **Vault items** are each encrypted with the User Key using AES-256-GCM. (A
-   future enhancement, matching Bitwarden, is a per-item key wrapped by the User
-   Key; tracked in the roadmap.)
+5. **Vault items** (synced) use **per-item keys** (the Bitwarden model): each item
+   is encrypted under its own random AES-256-GCM key, and that item key is wrapped
+   by the User Key. The stored value is a small JSON container `{v, key, data}`
+   holding both EncStrings; the server treats it as opaque text. This lets a single
+   item be shared by re-wrapping just its key for a recipient, and lets the User Key
+   be rotated by re-wrapping the item keys instead of re-encrypting item contents.
+   (The offline desktop vault keeps a single whole-file blob and does not use
+   per-item keys.)
 
 ### Encrypted blob format (`EncString`)
 
@@ -208,7 +213,9 @@ per-recipient public-key crypto) is future work, tracked in the roadmap.
 - [x] "Master Password Hash" derivation frozen: 1 PBKDF2 pass over the master key,
       salted by a domain-separated value (`passwd.master-password-hash.v1:` +
       password). Cross-checked TS↔Go against `docs/test-vectors.json`.
-- [ ] Decide per-item keys vs. single User Key (Bitwarden uses per-item).
+- [x] Per-item keys adopted for synced items (each item encrypted under its own key
+      wrapped by the User Key); enables sharing and User-Key rotation. The offline
+      desktop vault keeps the whole-file model.
 - [ ] Account/key rotation flow (re-encrypt-all on password change).
 - [x] 2FA: TOTP implemented (server-verified). Note: the TOTP secret is held
       server-side because the server must verify codes — it is an *auth factor*,

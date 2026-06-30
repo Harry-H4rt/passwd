@@ -8,8 +8,8 @@ import {
   deriveMasterPasswordHash,
   stretchMasterKey,
   unwrapUserKey,
-  encryptItem,
-  decryptItem,
+  encryptItemKeyed,
+  decryptItemKeyed,
   generateAccountId,
   enrollRecovery,
   completeRecovery,
@@ -192,7 +192,7 @@ export async function loadVault(s: Session): Promise<VaultItem[]> {
   const items: VaultItem[] = [];
   for (const c of ciphers) {
     try {
-      const fields = JSON.parse(await decryptItem(s.userKey, c.data)) as ItemFields;
+      const fields = JSON.parse(await decryptItemKeyed(s.userKey, c.data)) as ItemFields;
       items.push({ id: c.id, ...blankFields(), ...fields });
     } catch {
       // skip undecryptable items rather than break the whole vault
@@ -202,14 +202,14 @@ export async function loadVault(s: Session): Promise<VaultItem[]> {
 }
 
 export async function addItem(s: Session, fields: ItemFields): Promise<VaultItem> {
-  const data = await encryptItem(s.userKey, JSON.stringify(fields));
+  const data = await encryptItemKeyed(s.userKey, JSON.stringify(fields));
   const c = await api.createCipher(s.accessToken, data);
   return { id: c.id, ...fields };
 }
 
 export async function saveItem(s: Session, item: VaultItem): Promise<void> {
   const { id, ...fields } = item;
-  const data = await encryptItem(s.userKey, JSON.stringify(fields));
+  const data = await encryptItemKeyed(s.userKey, JSON.stringify(fields));
   await api.updateCipher(s.accessToken, id, data);
 }
 

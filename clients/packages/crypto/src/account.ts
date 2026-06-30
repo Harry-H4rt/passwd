@@ -85,6 +85,64 @@ export async function decryptItem(userKey: Uint8Array, encString: string): Promi
   return fromUtf8(await aesGcmDecrypt(itemKey(userKey), e.nonce, e.data));
 }
 
+// --- Per-item keys ----------------------------------------------------------
+//
+// Each synced vault item is encrypted under its own random key, which is wrapped
+// (encrypted) by the User Key. This is the Bitwarden model: it lets a single item
+// be shared by re-wrapping just its key for a recipient, and lets the User Key be
+// rotated by re-wrapping the per-item keys instead of re-encrypting item contents.
+// The stored value is a small JSON container holding both EncStrings; the server
+// treats it as opaque text. (The offline desktop vault keeps the whole-file model
+// and does not use this.)
+
+const ITEM_KEY_BYTES = 32;
+
+interface ItemContainer {
+  v: 2;
+  key: string; // the item key wrapped by the User Key (EncString)
+  data: string; // the item plaintext encrypted under the item key (EncString)
+}
+
+async function wrapItemKey(userKey: Uint8Array, key: Uint8Array): Promise<string> {
+  const { nonce, ciphertext } = await aesGcmEncrypt(itemKey(userKey), key);
+  return serializeEncString({ type: EncType.AesGcm, nonce, data: ciphertext });
+}
+
+async function unwrapItemKey(userKey: Uint8Array, wrapped: string): Promise<Uint8Array> {
+  const e = parseEncString(wrapped);
+  return aesGcmDecrypt(itemKey(userKey), e.nonce, e.data);
+}
+
+// Encrypt an item under a fresh per-item key wrapped by the User Key.
+export async function encryptItemKeyed(userKey: Uint8Array, plaintext: string): Promise<string> {
+  const key = randomBytes(ITEM_KEY_BYTES);
+  const enc = await aesGcmEncrypt(key, utf8(plaintext));
+  const container: ItemContainer = {
+    v: 2,
+    key: await wrapItemKey(userKey, key),
+    data: serializeEncString({ type: EncType.AesGcm, nonce: enc.nonce, data: enc.ciphertext }),
+  };
+  return JSON.stringify(container);
+}
+
+// Decrypt a per-item-keyed container. A bare EncString (legacy single-key item)
+// still decrypts directly, so no migration is required.
+export async function decryptItemKeyed(userKey: Uint8Array, stored: string): Promise<string> {
+  let container: ItemContainer | null = null;
+  try {
+    const parsed = JSON.parse(stored) as Partial<ItemContainer>;
+    if (parsed && typeof parsed === "object" && parsed.key && parsed.data) {
+      container = parsed as ItemContainer;
+    }
+  } catch {
+    // Not JSON: fall through to the legacy single-key path.
+  }
+  if (!container) return decryptItem(userKey, stored);
+  const key = await unwrapItemKey(userKey, container.key);
+  const e = parseEncString(container.data);
+  return fromUtf8(await aesGcmDecrypt(key, e.nonce, e.data));
+}
+
 // --- High-level flows -------------------------------------------------------
 
 export interface RegistrationBundle {

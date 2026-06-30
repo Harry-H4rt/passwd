@@ -222,6 +222,16 @@ pull request (see `.github/workflows/`).
   findings, and remediations (not a substitute for an external audit).
 - [`docs/ROADMAP.md`](docs/ROADMAP.md) — the staged build plan and current status.
 
+## Contributing
+
+Contributions are welcome — see [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, the
+pre-PR checks, and conventions.
+
+## Security
+
+Found a vulnerability? Please report it privately — see [`SECURITY.md`](SECURITY.md).
+Do not open a public issue for security reports.
+
 ## License
 
 Released under the [MIT License](LICENSE).

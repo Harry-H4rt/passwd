@@ -1,10 +1,10 @@
-# site — marketing & info site
+# site
 
-Public site for passwd, built with [Astro](https://astro.build) (static, fast).
-Design tokens live in `src/styles/global.css` (the shared, Proton-like light theme
-that the web vault redesign will adopt too).
+The public marketing and information site for passwd, built with
+[Astro](https://astro.build) (static and fast). The shared design tokens live in
+`src/styles/global.css`; the web vault mirrors the same design language.
 
-## Run
+## Develop
 
 ```bash
 cd site
@@ -16,14 +16,19 @@ npm run preview   # preview the production build
 
 ## Pages
 
-- `/` — landing (hero, features, security teaser, CTA)
+- `/` — landing page (hero, features, security overview, call to action)
 - `/features` — full feature list
-- `/security` — zero-knowledge explainer + what the server can/can't do
-- `/faq` — FAQ + Download section (web vault now; extension + desktop app to come)
+- `/security` — zero-knowledge explainer and what the server can and cannot do
+- `/faq` — frequently asked questions and the download section
 
-## Notes
+## Configuration
 
-- "Open vault" / "Create free vault" link to `http://localhost:5173` (dev). Set the
-  real vault URL (and `site` in `astro.config.mjs`) before deploying.
-- The Download section's desktop button is a placeholder until the Tauri desktop
-  app exists (see docs/ROADMAP.md).
+Public URLs are set at build time via `PUBLIC_*` environment variables (see
+`.env.example`):
+
+- `PUBLIC_VAULT_URL` — where "Open vault" links (defaults to `http://localhost:5173`).
+- `PUBLIC_GITHUB_URL` — repository and "build from source" links.
+- `PUBLIC_RELEASES_URL` — the desktop app **Download** button (defaults to
+  `$PUBLIC_GITHUB_URL/releases/latest`).
+
+See [`docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md) for production deployment.

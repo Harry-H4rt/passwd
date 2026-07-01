@@ -20,6 +20,25 @@ async function plugin() {
   return NativeBiometric;
 }
 
+// Debug helper: reports exactly why biometrics are (un)available on this device,
+// so we can diagnose "no biometric option" without device logs. Shown as small
+// text on the sign-in screen in native builds only.
+export async function biometricDiagnostic(): Promise<string> {
+  if (!isNative()) return "not native (isNativePlatform=false)";
+  let nb;
+  try {
+    nb = await plugin();
+  } catch (e) {
+    return "plugin import failed: " + (e instanceof Error ? e.message : String(e));
+  }
+  try {
+    const r: Record<string, unknown> = (await nb.isAvailable()) as unknown as Record<string, unknown>;
+    return `isAvailable=${r.isAvailable} type=${r.biometryType} err=${r.errorCode ?? r.code ?? "none"}`;
+  } catch (e) {
+    return "isAvailable() threw: " + (e instanceof Error ? e.message : String(e));
+  }
+}
+
 // True only on a device with enrolled biometrics (fingerprint / face).
 export async function biometricAvailable(): Promise<boolean> {
   if (!isNative()) return false;

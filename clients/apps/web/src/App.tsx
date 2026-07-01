@@ -9,6 +9,7 @@ import {
   TwoFactorRequiredError,
 } from "@passwd/api-client";
 import { masterPasswordIssue, normalizeIdentifier } from "@passwd/crypto";
+import { biometricAvailable, biometricEnrolled, enableBiometric, unlockWithBiometric } from "./biometric";
 import { VaultScreen } from "./VaultScreen";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
@@ -85,9 +86,67 @@ function AuthScreen(props: {
   const [totp, setTotp] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Native biometric unlock (mobile only; all no-ops in the browser).
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioEnrolled, setBioEnrolled] = useState(false);
+  const [bioRemember, setBioRemember] = useState(false);
+  const [bioBusy, setBioBusy] = useState(false);
 
   const needTotp = !!twoFactor?.methods.includes("totp");
   const canPasskey = !!twoFactor?.methods.includes("webauthn");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const avail = await biometricAvailable();
+      const enrolled = avail && (await biometricEnrolled());
+      if (!cancelled) {
+        setBioAvailable(avail);
+        setBioEnrolled(enrolled);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Store the master password behind the device biometric when opted in, then
+  // hand off. enableBiometric is a no-op off native, so this is browser-safe.
+  async function afterAuth(s: Session) {
+    if (bioRemember && identifier.trim() && password) {
+      try {
+        await enableBiometric(identifier.trim(), password);
+      } catch {
+        // biometric enrollment is best-effort; don't block sign-in
+      }
+    }
+    props.onAuthed(s);
+  }
+
+  // Unlock via fingerprint/face: retrieve the stored master password behind a
+  // biometric prompt, then run the normal login (honoring 2FA if enrolled).
+  async function unlockBio() {
+    setError(null);
+    setBioBusy(true);
+    try {
+      const creds = await unlockWithBiometric();
+      if (!creds) return; // cancelled or unavailable
+      try {
+        props.onAuthed(await loginAccount(creds.identifier, creds.password));
+      } catch (err) {
+        if (err instanceof TwoFactorRequiredError) {
+          setIdentifier(creds.identifier);
+          setPassword(creds.password);
+          setMode("login");
+          setTwoFactor({ methods: err.methods });
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Biometric unlock failed.");
+      }
+    } finally {
+      setBioBusy(false);
+    }
+  }
 
   function generate() {
     setIdentifier(newAccountId());
@@ -124,7 +183,7 @@ function AuthScreen(props: {
       }
       setBusy(true);
       try {
-        props.onAuthed(await recoverAccount(identifier, recoveryCode, password));
+        await afterAuth(await recoverAccount(identifier, recoveryCode, password));
       } catch {
         setError("Recovery failed. Double-check your identifier and recovery code.");
       } finally {
@@ -164,9 +223,9 @@ function AuthScreen(props: {
       if (mode === "register") {
         const s = await registerAccount(identifier, password);
         props.onRecovery(generated ? identifier.trim().toLowerCase() : null);
-        props.onAuthed(s);
+        await afterAuth(s);
       } else {
-        props.onAuthed(await loginAccount(identifier, password, needTotp ? totp : undefined));
+        await afterAuth(await loginAccount(identifier, password, needTotp ? totp : undefined));
       }
     } catch (err) {
       if (err instanceof TwoFactorRequiredError) {
@@ -189,7 +248,7 @@ function AuthScreen(props: {
     }
     setBusy(true);
     try {
-      props.onAuthed(await loginWithPasskey(identifier, password));
+      await afterAuth(await loginWithPasskey(identifier, password));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong.");
     } finally {
@@ -233,6 +292,16 @@ function AuthScreen(props: {
             Sign in
           </button>
         </div>
+
+        {bioEnrolled && !recover && !twoFactor && (
+          <>
+            <button type="button" className="ghost full" disabled={bioBusy} onClick={unlockBio}>
+              <Icon name="lock" size={16} />
+              <span>{bioBusy ? "Unlocking..." : "Unlock with biometrics"}</span>
+            </button>
+            <div className="or-divider">or</div>
+          </>
+        )}
 
         <label>Account identifier</label>
         <div className="pwfield">
@@ -357,6 +426,13 @@ function AuthScreen(props: {
               </>
             )}
           </div>
+        )}
+
+        {bioAvailable && !recover && !twoFactor && (
+          <label className="bio-check">
+            <input type="checkbox" checked={bioRemember} onChange={(e) => setBioRemember(e.target.checked)} />
+            <span>Unlock with biometrics on this device next time</span>
+          </label>
         )}
 
         {error && <div className="error">{error}</div>}

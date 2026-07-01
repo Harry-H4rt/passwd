@@ -52,6 +52,16 @@ export function basename(path: string): string {
 const readFile = (path: string) => invoke<string>("read_vault", { path });
 const writeFile = (path: string, contents: string) => invoke<void>("write_vault", { path, contents });
 
+// True if a vault file is still present at this path (moved/deleted paths return
+// false). Used on launch to decide whether to auto-open the most recent vault.
+export async function vaultExists(path: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>("vault_exists", { path });
+  } catch {
+    return false;
+  }
+}
+
 // --- native file dialogs ----------------------------------------------------
 
 const VAULT_FILTER = [{ name: "passwd vault", extensions: ["passwd"] }];

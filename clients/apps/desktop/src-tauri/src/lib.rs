@@ -16,6 +16,14 @@ fn write_vault(path: String, contents: String) -> Result<(), String> {
     fs::write(&path, contents).map_err(|e| e.to_string())
 }
 
+// Cheap existence check so the UI can auto-open the most recent vault on launch
+// without reading (and holding in memory) the whole encrypted file. Returns false
+// for a missing/moved/deleted path so we fall back to the start screen.
+#[tauri::command]
+fn vault_exists(path: String) -> bool {
+    std::path::Path::new(&path).is_file()
+}
+
 // The recent-vaults list (paths only, never contents) lives in the OS app-config
 // dir. It is the single piece of OS-level state the app keeps, and the UI can clear
 // it.
@@ -44,6 +52,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             read_vault,
             write_vault,
+            vault_exists,
             read_recents,
             write_recents
         ])

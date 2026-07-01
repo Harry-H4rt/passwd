@@ -14,28 +14,54 @@ import {
   readRecents,
   rememberRecent,
   clearRecents,
+  vaultExists,
 } from "./storage";
 
 // Drop the in-memory vault (and its user key) after this much inactivity.
 const IDLE_LOCK_MS = 10 * 60 * 1000;
 
 type Screen =
+  | { kind: "boot" }
   | { kind: "start" }
   | { kind: "unlock"; path: string }
   | { kind: "create"; path: string };
 
 export function App() {
   const [vault, setVault] = useState<DesktopVault | null>(null);
-  const [screen, setScreen] = useState<Screen>({ kind: "start" });
+  // Start on a transient boot screen while we decide where to land, so we never
+  // flash the start screen before jumping to unlock for a known vault.
+  const [screen, setScreen] = useState<Screen>({ kind: "boot" });
+
+  // On launch, jump straight to unlocking the most recent vault that still exists
+  // on disk, so a returning user only sees a password prompt. Falls back to the
+  // start screen (pick/create) when there's no usable recent vault.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const recents = await readRecents();
+      for (const r of recents) {
+        if (await vaultExists(r.path)) {
+          if (!cancelled) setScreen({ kind: "unlock", path: r.path });
+          return;
+        }
+      }
+      if (!cancelled) setScreen({ kind: "start" });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Idle auto-lock: any activity resets the timer; on expiry we discard the vault,
-  // which clears the decrypted user key and items from memory.
+  // which clears the decrypted user key and items from memory. We return to the
+  // unlock screen for the same vault so the user just re-enters their password.
   useEffect(() => {
     if (!vault) return;
+    const path = vault.path;
     let timer: number;
     const lock = () => {
       setVault(null);
-      setScreen({ kind: "start" });
+      setScreen({ kind: "unlock", path });
     };
     const reset = () => {
       window.clearTimeout(timer);
@@ -61,10 +87,17 @@ export function App() {
         vault={vault}
         onChange={setVault}
         onLock={() => {
+          setScreen({ kind: "unlock", path: vault.path });
           setVault(null);
-          setScreen({ kind: "start" });
         }}
       />
+    );
+  }
+  if (screen.kind === "boot") {
+    return (
+      <div className="center">
+        <span className="spinner" />
+      </div>
     );
   }
   if (screen.kind === "unlock") {
@@ -186,7 +219,7 @@ function Unlock(props: { path: string; onBack: () => void; onOpened: (v: Desktop
       <Toolbar />
       <button className="back-link" onClick={props.onBack}>
         <Icon name="arrowLeft" size={16} />
-        Back
+        Choose another vault
       </button>
       <form className="card auth" onSubmit={submit}>
         <div className="brand-row">

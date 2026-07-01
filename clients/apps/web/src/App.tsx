@@ -9,7 +9,14 @@ import {
   TwoFactorRequiredError,
 } from "@passwd/api-client";
 import { masterPasswordIssue, normalizeIdentifier } from "@passwd/crypto";
-import { biometricAvailable, biometricEnrolled, enableBiometric, unlockWithBiometric } from "./biometric";
+import {
+  biometricAvailable,
+  biometricEnrolled,
+  biometricDiagnostic,
+  enableBiometric,
+  unlockWithBiometric,
+  isNative,
+} from "./biometric";
 import { VaultScreen } from "./VaultScreen";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
@@ -91,6 +98,7 @@ function AuthScreen(props: {
   const [bioEnrolled, setBioEnrolled] = useState(false);
   const [bioRemember, setBioRemember] = useState(false);
   const [bioBusy, setBioBusy] = useState(false);
+  const [bioDiag, setBioDiag] = useState<string>("");
 
   const needTotp = !!twoFactor?.methods.includes("totp");
   const canPasskey = !!twoFactor?.methods.includes("webauthn");
@@ -100,9 +108,11 @@ function AuthScreen(props: {
     (async () => {
       const avail = await biometricAvailable();
       const enrolled = avail && (await biometricEnrolled());
+      const diag = await biometricDiagnostic();
       if (!cancelled) {
         setBioAvailable(avail);
         setBioEnrolled(enrolled);
+        setBioDiag(diag);
       }
     })();
     return () => {
@@ -450,6 +460,8 @@ function AuthScreen(props: {
           password reset; only a recovery code you set up yourself can get you back in, so keep it
           and your identifier safe.
         </p>
+
+        {isNative() && bioDiag && <p className="fineprint">biometrics: {bioDiag}</p>}
       </form>
     </div>
   );

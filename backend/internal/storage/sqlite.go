@@ -428,6 +428,28 @@ func (s *SQLite) DeleteRefreshTokensForUser(ctx context.Context, userID string) 
 	return err
 }
 
+func (s *SQLite) ListRefreshTokensForUser(ctx context.Context, userID string) ([]RefreshToken, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT token_hash, user_id, expires_at, created_at, used FROM refresh_tokens
+		 WHERE user_id = ? AND used = 0 AND expires_at > ? ORDER BY created_at DESC`, userID, unix(time.Now()))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]RefreshToken, 0)
+	for rows.Next() {
+		var rt RefreshToken
+		var expires, created int64
+		var used int
+		if err := rows.Scan(&rt.TokenHash, &rt.UserID, &expires, &created, &used); err != nil {
+			return nil, err
+		}
+		rt.ExpiresAt, rt.CreatedAt, rt.Used = fromUnix(expires), fromUnix(created), used != 0
+		out = append(out, rt)
+	}
+	return out, rows.Err()
+}
+
 func (s *SQLite) AppendAuditEvent(ctx context.Context, e AuditEvent) error {
 	_, err := s.db.ExecContext(ctx,
 		`INSERT INTO audit_events (id, user_id, event, detail, created_at) VALUES (?,?,?,?,?)`,

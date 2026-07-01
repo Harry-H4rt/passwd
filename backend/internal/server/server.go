@@ -84,6 +84,10 @@ func (s *Server) Routes() http.Handler {
 	// Self-service account deletion — requires a valid access token.
 	mux.Handle("DELETE /api/account", s.requireAuth(http.HandlerFunc(s.handleDeleteAccount)))
 
+	// Active sessions + "sign out everywhere" — requires a valid access token.
+	mux.Handle("GET /api/sessions", s.requireAuth(http.HandlerFunc(s.handleListSessions)))
+	mux.Handle("POST /api/auth/logout-all", s.requireAuth(http.HandlerFunc(s.handleLogoutAll)))
+
 	// Account recovery — no access token (the master password is forgotten), so
 	// these are rate limited and protected by the same per-account lockout as login.
 	mux.Handle("POST /api/auth/recovery/challenge", s.rateLimit(http.HandlerFunc(s.handleRecoveryChallenge)))

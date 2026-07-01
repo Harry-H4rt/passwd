@@ -314,6 +314,20 @@ func (m *Memory) DeleteRefreshTokensForUser(_ context.Context, userID string) er
 	return nil
 }
 
+func (m *Memory) ListRefreshTokensForUser(_ context.Context, userID string) ([]RefreshToken, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	now := time.Now()
+	out := make([]RefreshToken, 0)
+	for _, rt := range m.refresh {
+		if rt.UserID == userID && !rt.Used && rt.ExpiresAt.After(now) {
+			out = append(out, rt)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt.After(out[j].CreatedAt) })
+	return out, nil
+}
+
 func (m *Memory) CreateShare(_ context.Context, s Share) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

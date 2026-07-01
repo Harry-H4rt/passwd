@@ -157,6 +157,15 @@ export type ActivityEvent = api.AuditEvent;
 export const getActivity = (s: Session) =>
   api.auditLog(s.accessToken).then((r) => r.events);
 
+// --- sessions ---------------------------------------------------------------
+// (SessionInfo is exported from api.ts and re-exported at the package root.)
+
+// Active sessions (one per signed-in device).
+export const getSessions = (s: Session) => api.listSessions(s.accessToken).then((r) => r.sessions);
+
+// Revoke every session. The caller should drop the current session afterward.
+export const signOutEverywhere = (s: Session) => api.logoutAll(s.accessToken);
+
 // --- account deletion -------------------------------------------------------
 
 // Permanently erase the account and all of its data. Irreversible; the caller

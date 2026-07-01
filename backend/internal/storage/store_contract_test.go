@@ -151,6 +151,12 @@ func TestStoreContract(t *testing.T) {
 				t.Fatal("refresh token not marked used")
 			}
 			_ = st.CreateRefreshToken(ctx, RefreshToken{TokenHash: "h2", UserID: "u1", ExpiresAt: now.Add(time.Hour), CreatedAt: now})
+			// Active-session list: only the live, un-rotated token counts. h1 is used
+			// (rotated) and hx is expired, so both are excluded — leaving just h2.
+			_ = st.CreateRefreshToken(ctx, RefreshToken{TokenHash: "hx", UserID: "u1", ExpiresAt: now.Add(-time.Minute), CreatedAt: now})
+			if ss, _ := st.ListRefreshTokensForUser(ctx, "u1"); len(ss) != 1 || ss[0].TokenHash != "h2" {
+				t.Fatalf("active sessions = %+v; want just h2", ss)
+			}
 			if err := st.DeleteRefreshTokensForUser(ctx, "u1"); err != nil {
 				t.Fatal(err)
 			}

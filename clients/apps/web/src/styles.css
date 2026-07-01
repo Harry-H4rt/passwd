@@ -48,6 +48,16 @@
   border-color: var(--accent);
 }
 
+/* Active sessions + sign-out-everywhere. */
+.sessions-block {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+.sessions-block h3 {
+  margin: 0 0 6px;
+}
+
 /* Account "danger zone": irreversible self-service account deletion. */
 .danger-zone {
   margin-top: 26px;

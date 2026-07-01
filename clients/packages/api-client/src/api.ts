@@ -71,6 +71,17 @@ export const register = (bundle: RegistrationBundle) =>
 export const deleteAccountReq = (token: string) =>
   call<void>("DELETE", "/api/account", undefined, token);
 
+export interface SessionInfo {
+  createdAt: string;
+  expiresAt: string;
+}
+
+export const listSessions = (token: string) =>
+  call<{ sessions: SessionInfo[] }>("GET", "/api/sessions", undefined, token);
+
+export const logoutAll = (token: string) =>
+  call<void>("POST", "/api/auth/logout-all", undefined, token);
+
 // Login can succeed, or report that a second factor is required. We don't use
 // call() here because the "2FA required" case is a 401 we want to handle, not throw.
 // `methods` lists the enrolled factors ("webauthn", "totp") so the UI can offer a

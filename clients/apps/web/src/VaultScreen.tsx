@@ -19,6 +19,9 @@ import {
   enableRecovery,
   disableRecovery,
   getActivity,
+  getSessions,
+  signOutEverywhere,
+  type SessionInfo,
   deleteAccount,
   shareItem,
   listSharedWithMe,
@@ -583,6 +586,26 @@ function AccountPanel(props: {
   const [confirm, setConfirm] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
+  const [signingOut, setSigningOut] = useState(false);
+
+  useEffect(() => {
+    getSessions(props.session)
+      .then(setSessions)
+      .catch(() => setSessions([]));
+  }, [props.session]);
+
+  async function signOutAll() {
+    setError(null);
+    setSigningOut(true);
+    try {
+      await signOutEverywhere(props.session);
+      props.onDeleted(); // revokes every session; drop this one too
+    } catch (e) {
+      setError(errMsg(e));
+      setSigningOut(false);
+    }
+  }
 
   async function del() {
     setError(null);
@@ -609,6 +632,19 @@ function AccountPanel(props: {
           This is your login handle (a private passphrase or email). It is blinded before it reaches the server, which
           never sees it in the clear.
         </p>
+
+        <div className="sessions-block">
+          <h3>Active sessions</h3>
+          <p className="muted">
+            {sessions === null
+              ? "Loading sessions..."
+              : `${sessions.length} device${sessions.length === 1 ? "" : "s"} currently signed in.`}{" "}
+            Signing out everywhere revokes every session; each device has to sign in again.
+          </p>
+          <button className="ghost" disabled={signingOut} onClick={signOutAll}>
+            {signingOut ? "Signing out..." : "Sign out of all devices"}
+          </button>
+        </div>
 
         <div className="danger-zone">
           <h3>Delete account</h3>
@@ -835,6 +871,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
   "recovery.disable": "Recovery code removed",
   "recovery.complete": "Account recovered",
   "token.reuse_detected": "Session token reuse detected",
+  "session.revoke_all": "Signed out all devices",
   "cipher.create": "Item added",
   "cipher.update": "Item edited",
   "cipher.delete": "Item deleted",

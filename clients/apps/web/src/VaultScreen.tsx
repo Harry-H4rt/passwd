@@ -82,6 +82,7 @@ export function VaultScreen(props: {
   const [toast, setToast] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // mobile sidebar drawer
   const [loginAlert, setLoginAlert] = useState<string | null>(null);
 
   function flash(msg: string) {
@@ -196,10 +197,31 @@ export function VaultScreen(props: {
   );
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
+  // On mobile the layout is one pane at a time: the item list, or a full-screen
+  // detail (an item, the account panel, or the post-signup recovery banner).
+  const detailOpen = accountOpen || selected != null || props.recovery != null;
+
+  function closeDetail() {
+    setSelectedId(null);
+    setAccountOpen(false);
+  }
 
   return (
-    <div className="vault-layout">
-      <aside className="sidebar">
+    <div className={"vault-layout" + (detailOpen ? " detail-open" : "") + (menuOpen ? " menu-open" : "")}>
+      <header className="mobile-topbar">
+        <button className="icon-btn" aria-label="Menu" onClick={() => setMenuOpen(true)}>
+          <Icon name="menu" size={22} />
+        </button>
+        <span className="mobile-title">
+          <Icon name="lock" size={18} /> passwd
+        </span>
+        <button className="icon-btn" aria-label="Add item" onClick={() => setEditing({ id: "", ...blankFields() })}>
+          <Icon name="edit" size={20} />
+        </button>
+      </header>
+      <div className="drawer-backdrop" onClick={() => setMenuOpen(false)} />
+
+      <aside className="sidebar" onClick={() => setMenuOpen(false)}>
         <div className="sidebar-brand">
           <Icon name="lock" size={20} /> <span>passwd</span>
         </div>
@@ -304,6 +326,11 @@ export function VaultScreen(props: {
       </section>
 
       <section className="detail-col">
+        {!props.recovery && (
+          <button className="mobile-back" onClick={closeDetail}>
+            <Icon name="arrowLeft" size={16} /> Back
+          </button>
+        )}
         {props.recovery && (
           <div className="recovery">
             <strong>Save your recovery passphrase.</strong> This is the only way back into your account, and there is no

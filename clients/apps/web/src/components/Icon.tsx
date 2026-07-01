@@ -18,6 +18,7 @@ const paths: Record<string, string> = {
   key: "M2.59 17.41A2 2 0 0 0 2 18.83V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 1 1-1v-1a1 1 0 0 1 1-1h.17a2 2 0 0 0 1.41-.59l.82-.82a6.5 6.5 0 1 0-4-4z M16.5 7.5h.01",
   clock: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20z M12 6v6l4 2",
   share: "M22 2L11 13 M22 2l-7 20-4-9-9-4 20-7z",
+  menu: "M3 12h18 M3 6h18 M3 18h18",
 };
 
 export function Icon({ name, size = 18 }: { name: keyof typeof paths | string; size?: number }) {

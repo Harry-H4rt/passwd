@@ -11,6 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@capacitor/core": "^6.2.1",
+    "@capgo/capacitor-native-biometric": "^6.0.0",
     "@passwd/api-client": "*",
     "@passwd/crypto": "*",
     "react": "^18.3.1",

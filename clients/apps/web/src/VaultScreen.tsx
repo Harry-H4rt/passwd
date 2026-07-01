@@ -32,6 +32,7 @@ import {
 } from "@passwd/api-client";
 import { normalizeIdentifier } from "@passwd/crypto";
 import { passwordWeakness, reusedItemIds, breachedItemIds } from "./health";
+import { biometricEnrolled, disableBiometric } from "./biometric";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
 import { AsyncButton } from "./components/AsyncButton";
@@ -621,11 +622,13 @@ function AccountPanel(props: {
   const [error, setError] = useState<string | null>(null);
   const [sessions, setSessions] = useState<SessionInfo[] | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [bioOn, setBioOn] = useState(false);
 
   useEffect(() => {
     getSessions(props.session)
       .then(setSessions)
       .catch(() => setSessions([]));
+    biometricEnrolled().then(setBioOn);
   }, [props.session]);
 
   async function signOutAll() {
@@ -678,6 +681,19 @@ function AccountPanel(props: {
             {signingOut ? "Signing out..." : "Sign out of all devices"}
           </button>
         </div>
+
+        {bioOn && (
+          <div className="sessions-block">
+            <h3>Biometric unlock</h3>
+            <p className="muted">
+              This device can unlock your vault with a fingerprint or face. Your master password is held in the device's
+              secure hardware store, released only after a biometric check.
+            </p>
+            <button className="ghost" onClick={() => disableBiometric().then(() => setBioOn(false))}>
+              Disable biometric unlock
+            </button>
+          </div>
+        )}
 
         <div className="danger-zone">
           <h3>Delete account</h3>

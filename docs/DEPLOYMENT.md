@@ -3,6 +3,93 @@
 > ⚠️ Pre-audit. Do not host this for real users until the Phase 5 security audit
 > gate passes (see ROADMAP). The steps below are the mechanics for when it does.
 
+## Reference deployment: Cloudflare Pages + Fly.io
+
+A concrete, no-custom-domain setup you can stand up today. Three pieces on three
+free-tier-friendly hosts, wired together by URL:
+
+| Piece | Host | URL (example) | Build config |
+|---|---|---|---|
+| Marketing site (`site/`) | Cloudflare Pages | `https://passwd-site.pages.dev` | root `site`, build `npm ci && npm run build`, output `dist` |
+| Web vault (`clients/apps/web`) | Cloudflare Pages | `https://passwd-vault.pages.dev` | root `clients`, build `npm ci && npm -w @passwd/web run build`, output `apps/web/dist` |
+| Backend (`backend/`) | Fly.io | `https://passwd-api.fly.dev` | `backend/fly.toml` (Docker) |
+
+Substitute your own project/app names (the `*.pages.dev` and `*.fly.dev`
+subdomains are globally unique). The three URLs reference each other, so pick them
+first, then plug them into the steps below.
+
+### 1. Backend on Fly.io
+
+`backend/fly.toml` is committed. From `backend/`:
+
+```bash
+fly auth login                       # opens a browser (run via `! fly auth login`)
+# Edit fly.toml: set `app` to your name and `primary_region` near you.
+fly apps create passwd-api           # or let `fly launch --no-deploy` do it
+fly volumes create passwd_data --region lhr --size 1   # SQLite lives here
+# The two real secrets — generated at run time, never written to git:
+fly secrets set \
+  PASSWD_JWT_SECRET=$(openssl rand -hex 32) \
+  PASSWD_IDENTIFIER_PEPPER=$(openssl rand -hex 32)
+fly deploy
+fly open /healthz                    # should return {"status":"ok"}
+```
+
+The CORS + passkey env vars in `fly.toml` point at the web-vault origin
+(`PASSWD_ALLOWED_ORIGINS`, `PASSWD_WEBAUTHN_RP_ID`, `PASSWD_WEBAUTHN_RP_ORIGINS`);
+update them to your vault's `*.pages.dev` URL before `fly deploy`. `PASSWD_IDENTIFIER_PEPPER`
+is **permanent** — back it up; rotating it orphans every account.
+
+Rate limiting note: behind Fly's edge the app sees Fly's internal proxy as the
+peer, so `PASSWD_TRUSTED_PROXIES` is left unset (there is no stable proxy IP to
+trust) and the per-IP limiter effectively keys on the proxy. The **per-account
+login lockout is the real brute-force defense** and is unaffected; raise
+`PASSWD_AUTH_RATELIMIT_PER_MIN` if legitimate users get limited.
+
+### 2. Web vault on Cloudflare Pages
+
+Create a Pages project connected to this repo (Cloudflare dashboard → Workers &
+Pages → Create → Pages → Connect to Git):
+
+- **Root directory:** `clients`
+- **Build command:** `npm ci && npm -w @passwd/web run build`
+- **Build output directory:** `apps/web/dist`
+- **Environment variables:**
+  - `NODE_VERSION` = `20`
+  - `VITE_API_BASE` = `https://passwd-api.fly.dev` (your backend URL)
+  - `VITE_SITE_URL` = `https://passwd-site.pages.dev` (your marketing site URL)
+
+`clients/apps/web/public/_redirects` (committed) gives the SPA its deep-link
+fallback. Because the vault is a separate origin from the API, the backend's
+`PASSWD_ALLOWED_ORIGINS` must list this exact URL (step 1).
+
+### 3. Marketing site on Cloudflare Pages
+
+A second Pages project from the same repo:
+
+- **Root directory:** `site`
+- **Build command:** `npm ci && npm run build`
+- **Build output directory:** `dist`
+- **Environment variables:**
+  - `NODE_VERSION` = `20`
+  - `PUBLIC_SITE_URL` = `https://passwd-site.pages.dev` (this site's own URL)
+  - `PUBLIC_VAULT_URL` = `https://passwd-vault.pages.dev` (the web vault)
+  - `PUBLIC_GITHUB_URL` = `https://github.com/Harry-H4rt/passwd`
+  - `PUBLIC_RELEASES_URL` = `https://github.com/Harry-H4rt/passwd/releases/latest`
+
+### 4. Verify end-to-end
+
+1. `https://passwd-site.pages.dev` loads; "Open vault" → the vault URL; "Download" →
+   GitHub releases.
+2. `https://passwd-vault.pages.dev` loads and can create/unlock an account (this
+   exercises CORS against the Fly backend and the passkey RP config).
+3. Swapping in a real domain later is just: point DNS at each host, update the
+   `PUBLIC_*` / `VITE_*` / `PASSWD_*` URLs, and re-deploy. Note passkeys are bound
+   to `PASSWD_WEBAUTHN_RP_ID`, so changing the vault's host invalidates any already
+   enrolled passkeys.
+
+The generic, host-agnostic mechanics for each piece follow below.
+
 ## Backend (production)
 
 Set strong, **stable** secrets — the server refuses to boot in production with the

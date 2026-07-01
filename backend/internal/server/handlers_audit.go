@@ -31,6 +31,7 @@ const (
 	evtCipherUpdate     = "cipher.update"
 	evtCipherDelete     = "cipher.delete"
 	evtShareCreate      = "share.create"
+	evtSessionRevokeAll = "session.revoke_all"
 )
 
 // audit records a security event. Failures are logged but never block the request

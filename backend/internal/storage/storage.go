@@ -172,8 +172,14 @@ type Store interface {
 	// presentation of the same token can be detected as reuse.
 	MarkRefreshTokenUsed(ctx context.Context, tokenHash string) error
 	// DeleteRefreshTokensForUser revokes every refresh token for a user. Used on
-	// detected token reuse and on master-password rotation (recovery).
+	// detected token reuse, master-password rotation (recovery), and the
+	// user-initiated "sign out everywhere".
 	DeleteRefreshTokensForUser(ctx context.Context, userID string) error
+	// ListRefreshTokensForUser returns a user's live (unexpired, un-rotated)
+	// refresh tokens, newest first — one per active session — for the session
+	// list. Rotated (used) tokens are retained for reuse detection but are not
+	// active sessions, so they are excluded.
+	ListRefreshTokensForUser(ctx context.Context, userID string) ([]RefreshToken, error)
 
 	// AppendAuditEvent records one entry in the append-only security log.
 	AppendAuditEvent(ctx context.Context, e AuditEvent) error

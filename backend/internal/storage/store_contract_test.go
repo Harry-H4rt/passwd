@@ -188,6 +188,59 @@ func TestStoreContract(t *testing.T) {
 			if ev[0].Event != "cipher.create" {
 				t.Fatalf("audit not newest-first: %+v", ev)
 			}
+
+			// --- account deletion: cascade across every table + user isolation ---
+			del := User{
+				ID: "del1", IdentifierHash: "idh-del1",
+				KDF:                    KDFParams{Type: "argon2id", Iterations: 3, MemoryMiB: 64, Parallelism: 4},
+				MasterPasswordVerifier: "v", ProtectedUserKey: "puk", PublicKey: "pub", ProtectedPrivateKey: "ppk",
+				CreatedAt: now, UpdatedAt: now,
+			}
+			if err := st.CreateUser(ctx, del); err != nil {
+				t.Fatalf("create del user: %v", err)
+			}
+			_ = st.CreateCipher(ctx, Cipher{ID: "dc1", UserID: "del1", Data: "d", CreatedAt: now, UpdatedAt: now})
+			_ = st.CreateRefreshToken(ctx, RefreshToken{TokenHash: "dh1", UserID: "del1", ExpiresAt: now.Add(time.Hour), CreatedAt: now})
+			_ = st.CreateWebAuthnCredential(ctx, WebAuthnCredential{ID: "dp1", UserID: "del1", CredentialID: []byte("cred-del1"), PublicKey: []byte("pk"), CreatedAt: now, UpdatedAt: now})
+			_ = st.AppendAuditEvent(ctx, AuditEvent{ID: "da1", UserID: "del1", Event: "login.success", CreatedAt: now})
+			_ = st.CreateShare(ctx, Share{ID: "ds1", OwnerUserID: "del1", RecipientUserID: "u2", WrappedKey: "wk", Data: "dt", CreatedAt: now})   // owned
+			_ = st.CreateShare(ctx, Share{ID: "ds2", OwnerUserID: "other", RecipientUserID: "del1", WrappedKey: "wk", Data: "dt", CreatedAt: now}) // received
+
+			if err := st.DeleteAccount(ctx, "del1"); err != nil {
+				t.Fatalf("delete account: %v", err)
+			}
+			if _, err := st.GetUserByID(ctx, "del1"); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("user after delete = %v; want ErrNotFound", err)
+			}
+			if c, _ := st.ListCiphers(ctx, "del1"); len(c) != 0 {
+				t.Fatalf("ciphers after delete: %+v", c)
+			}
+			if _, err := st.GetRefreshToken(ctx, "dh1"); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("refresh after delete = %v; want ErrNotFound", err)
+			}
+			if pk, _ := st.ListWebAuthnCredentials(ctx, "del1"); len(pk) != 0 {
+				t.Fatalf("passkeys after delete: %+v", pk)
+			}
+			if a, _ := st.ListAuditEvents(ctx, "del1", 10); len(a) != 0 {
+				t.Fatalf("audit after delete: %+v", a)
+			}
+			if in, _ := st.ListSharesForRecipient(ctx, "del1"); len(in) != 0 {
+				t.Fatalf("received shares after delete: %+v", in)
+			}
+			if out, _ := st.ListSharesForRecipient(ctx, "u2"); len(out) != 0 {
+				t.Fatalf("owned share not removed on owner delete: %+v", out)
+			}
+			// Other users are untouched.
+			if _, err := st.GetUserByID(ctx, "u1"); err != nil {
+				t.Fatalf("u1 wrongly affected by del1 deletion: %v", err)
+			}
+			if a, _ := st.ListAuditEvents(ctx, "u1", 10); len(a) != 2 {
+				t.Fatalf("u1 audit wrongly affected: %d; want 2", len(a))
+			}
+			// Deleting a missing account is reported, not silent.
+			if err := st.DeleteAccount(ctx, "del1"); !errors.Is(err, ErrNotFound) {
+				t.Fatalf("delete missing account = %v; want ErrNotFound", err)
+			}
 		})
 	}
 }

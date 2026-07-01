@@ -19,6 +19,7 @@ import {
   enableRecovery,
   disableRecovery,
   getActivity,
+  deleteAccount,
   shareItem,
   listSharedWithMe,
   removeSharedItem,
@@ -311,7 +312,7 @@ export function VaultScreen(props: {
           </div>
         )}
         {accountOpen ? (
-          <AccountPanel identifier={session.identifier} onCopy={copy} />
+          <AccountPanel identifier={session.identifier} session={session} onCopy={copy} onDeleted={props.onLock} />
         ) : selected ? (
           <ItemDetail
             key={selected.id}
@@ -573,7 +574,28 @@ function ItemDetail(props: {
 
 // Account view: shows the full login identifier (which is truncated in the
 // sidebar) with a copy button.
-function AccountPanel(props: { identifier: string; onCopy: (label: string, value: string) => void }) {
+function AccountPanel(props: {
+  identifier: string;
+  session: Session;
+  onCopy: (label: string, value: string) => void;
+  onDeleted: () => void;
+}) {
+  const [confirm, setConfirm] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function del() {
+    setError(null);
+    setBusy(true);
+    try {
+      await deleteAccount(props.session);
+      props.onDeleted();
+    } catch (e) {
+      setError(errMsg(e));
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="detail">
       <div className="detail-head">
@@ -587,6 +609,28 @@ function AccountPanel(props: { identifier: string; onCopy: (label: string, value
           This is your login handle (a private passphrase or email). It is blinded before it reaches the server, which
           never sees it in the clear.
         </p>
+
+        <div className="danger-zone">
+          <h3>Delete account</h3>
+          <p className="muted">
+            Permanently erases your account and every item, share, and security record. This cannot be undone: the
+            server never held your master password, so there is nothing to recover afterward.
+          </p>
+          <label>
+            Type <strong>DELETE</strong> to confirm
+          </label>
+          <input
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            placeholder="DELETE"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {error && <div className="error">{error}</div>}
+          <button className="danger-btn" disabled={confirm !== "DELETE" || busy} onClick={del}>
+            {busy ? "Deleting..." : "Delete my account"}
+          </button>
+        </div>
       </div>
     </div>
   );

@@ -245,6 +245,27 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, refreshResponse{AccessToken: tokens.access, RefreshToken: tokens.refresh})
 }
 
+// handleDeleteAccount permanently erases the authenticated user and all of their
+// data. Irreversible and, like the rest of the vault, unrecoverable: the server
+// never held the master password, so there is nothing to "reset" afterward.
+func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) {
+	userID, ok := userIDFrom(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err := s.store.DeleteAccount(r.Context(), userID); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "account not found")
+			return
+		}
+		s.logger.Error("delete account", "err", err)
+		writeError(w, http.StatusInternalServerError, "could not delete account")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // --- token helper -----------------------------------------------------------
 
 type tokenPair struct{ access, refresh string }

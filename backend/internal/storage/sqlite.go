@@ -232,6 +232,39 @@ func (s *SQLite) RotateMasterPassword(ctx context.Context, userID, verifier, pro
 	return notFoundIfNoRows(res)
 }
 
+// DeleteAccount removes the user and all of their data in one transaction, so a
+// failure part-way leaves the account intact rather than half-deleted.
+func (s *SQLite) DeleteAccount(ctx context.Context, userID string) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, q := range []string{
+		`DELETE FROM ciphers WHERE user_id = ?`,
+		`DELETE FROM refresh_tokens WHERE user_id = ?`,
+		`DELETE FROM webauthn_credentials WHERE user_id = ?`,
+		`DELETE FROM audit_events WHERE user_id = ?`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, userID); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM shares WHERE owner_user_id = ? OR recipient_user_id = ?`, userID, userID); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = ?`, userID)
+	if err != nil {
+		return err
+	}
+	if err := notFoundIfNoRows(res); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func boolToInt(b bool) int {
 	if b {
 		return 1

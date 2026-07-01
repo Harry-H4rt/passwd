@@ -81,6 +81,9 @@ func (s *Server) Routes() http.Handler {
 	mux.Handle("POST /api/auth/login", s.rateLimit(http.HandlerFunc(s.handleLogin)))
 	mux.Handle("POST /api/auth/refresh", s.rateLimit(http.HandlerFunc(s.handleRefresh)))
 
+	// Self-service account deletion — requires a valid access token.
+	mux.Handle("DELETE /api/account", s.requireAuth(http.HandlerFunc(s.handleDeleteAccount)))
+
 	// Account recovery — no access token (the master password is forgotten), so
 	// these are rate limited and protected by the same per-account lockout as login.
 	mux.Handle("POST /api/auth/recovery/challenge", s.rateLimit(http.HandlerFunc(s.handleRecoveryChallenge)))

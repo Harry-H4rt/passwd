@@ -122,6 +122,45 @@ func (m *Memory) RotateMasterPassword(_ context.Context, userID, verifier, prote
 	return nil
 }
 
+func (m *Memory) DeleteAccount(_ context.Context, userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	u, ok := m.users[userID]
+	if !ok {
+		return ErrNotFound
+	}
+	delete(m.users, userID)
+	delete(m.byIDHash, u.IdentifierHash)
+	for id, c := range m.ciphers {
+		if c.UserID == userID {
+			delete(m.ciphers, id)
+		}
+	}
+	for h, rt := range m.refresh {
+		if rt.UserID == userID {
+			delete(m.refresh, h)
+		}
+	}
+	for id, p := range m.passkeys {
+		if p.UserID == userID {
+			delete(m.passkeys, id)
+		}
+	}
+	for id, sh := range m.shares {
+		if sh.OwnerUserID == userID || sh.RecipientUserID == userID {
+			delete(m.shares, id)
+		}
+	}
+	kept := make([]AuditEvent, 0, len(m.audit))
+	for _, e := range m.audit {
+		if e.UserID != userID {
+			kept = append(kept, e)
+		}
+	}
+	m.audit = kept
+	return nil
+}
+
 func (m *Memory) CreateWebAuthnCredential(_ context.Context, c WebAuthnCredential) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()

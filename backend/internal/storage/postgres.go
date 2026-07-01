@@ -213,6 +213,39 @@ func (p *Postgres) RotateMasterPassword(ctx context.Context, userID, verifier, p
 	return notFoundIfNoRows(res)
 }
 
+// DeleteAccount removes the user and all of their data in one transaction, so a
+// failure part-way leaves the account intact rather than half-deleted.
+func (p *Postgres) DeleteAccount(ctx context.Context, userID string) error {
+	tx, err := p.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	for _, q := range []string{
+		`DELETE FROM ciphers WHERE user_id = $1`,
+		`DELETE FROM refresh_tokens WHERE user_id = $1`,
+		`DELETE FROM webauthn_credentials WHERE user_id = $1`,
+		`DELETE FROM audit_events WHERE user_id = $1`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, userID); err != nil {
+			return err
+		}
+	}
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM shares WHERE owner_user_id = $1 OR recipient_user_id = $1`, userID); err != nil {
+		return err
+	}
+	res, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, userID)
+	if err != nil {
+		return err
+	}
+	if err := notFoundIfNoRows(res); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
 func (p *Postgres) CreateWebAuthnCredential(ctx context.Context, c WebAuthnCredential) error {
 	_, err := p.db.ExecContext(ctx,
 		`INSERT INTO webauthn_credentials

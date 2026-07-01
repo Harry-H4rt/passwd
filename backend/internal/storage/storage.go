@@ -149,6 +149,10 @@ type Store interface {
 	// protected User Key, and KDF params. Used by the recovery flow (and a future
 	// change-password flow). The recovery-wrapped key is untouched.
 	RotateMasterPassword(ctx context.Context, userID, verifier, protectedUserKey string, kdf KDFParams) error
+	// DeleteAccount permanently removes a user and every row attributable to them
+	// (ciphers, refresh tokens, passkeys, audit events, and shares they own or
+	// received), atomically. Returns ErrNotFound if the user does not exist.
+	DeleteAccount(ctx context.Context, userID string) error
 
 	CreateWebAuthnCredential(ctx context.Context, c WebAuthnCredential) error
 	ListWebAuthnCredentials(ctx context.Context, userID string) ([]WebAuthnCredential, error)

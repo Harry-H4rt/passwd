@@ -157,6 +157,12 @@ export type ActivityEvent = api.AuditEvent;
 export const getActivity = (s: Session) =>
   api.auditLog(s.accessToken).then((r) => r.events);
 
+// --- account deletion -------------------------------------------------------
+
+// Permanently erase the account and all of its data. Irreversible; the caller
+// should drop the session afterward (there is nothing left to sign in to).
+export const deleteAccount = (s: Session) => api.deleteAccountReq(s.accessToken);
+
 // Forgot-password recovery: fetch the recovery-wrapped key, unwrap it with the
 // recovery code, set a NEW master password, and log in. The User Key is unchanged,
 // so existing vault items remain decryptable. A wrong code (or unknown account)

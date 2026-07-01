@@ -1204,6 +1204,23 @@ button {
   .modal {
     width: min(560px, 94vw);
   }
+
+  /* Auth screen: top-align and tighten so the register form fits without
+     scrolling (centering a tall form wasted vertical space). */
+  .center {
+    place-items: start center;
+    padding: 14px;
+    min-height: 100dvh;
+  }
+  .auth {
+    padding: 20px 18px;
+  }
+  .auth h1 {
+    font-size: 23px;
+  }
+  .auth .brand-row {
+    margin-bottom: 0;
+  }
 }
 
 /* Passkeys management list */

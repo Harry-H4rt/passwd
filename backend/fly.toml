@@ -1,0 +1,47 @@
+# Fly.io deployment for the passwd backend. Deploys backend/Dockerfile and mounts a
+# persistent volume for the SQLite database. The two real secrets (JWT signing key
+# and identifier pepper) are NOT stored here — set them with `fly secrets set` so
+# they never land in git. See docs/DEPLOYMENT.md ("Reference deployment") for the
+# full runbook.
+#
+# Change `app` to your own globally-unique name; it becomes <app>.fly.dev.
+
+app = "passwd-api"
+primary_region = "lhr" # pick one near you: `fly platform regions`
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PASSWD_ENV = "production"
+  PASSWD_ADDR = ":8080"
+  PASSWD_DB = "/data/passwd.db"
+  # CORS + passkey (WebAuthn) config all point at the web-vault origin. Update
+  # these to your Cloudflare Pages vault URL. The RP ID is host-only (no scheme);
+  # passkeys bind to it, so keep it stable once users enroll.
+  PASSWD_ALLOWED_ORIGINS = "https://passwd-vault.pages.dev"
+  PASSWD_WEBAUTHN_RP_ID = "passwd-vault.pages.dev"
+  PASSWD_WEBAUTHN_RP_NAME = "passwd"
+  PASSWD_WEBAUTHN_RP_ORIGINS = "https://passwd-vault.pages.dev"
+
+# SQLite lives on this volume. Because the DB is a single file on one volume, run
+# exactly ONE machine (do not scale >1). For horizontal scaling switch PASSWD_DB to
+# a `postgres://…` URL instead and drop this mount.
+[[mounts]]
+  source = "passwd_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Cost-saving auto-sleep. Set min_machines_running = 1 to avoid cold starts.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    method = "get"
+    path = "/healthz"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"

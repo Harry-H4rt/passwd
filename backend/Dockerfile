@@ -17,8 +17,10 @@ RUN adduser -D -H -u 10001 passwd \
   && chown passwd:passwd /data
 COPY --from=build /out/passwd-server /usr/local/bin/passwd-server
 USER passwd
-ENV PASSWD_ADDR=:8080 \
-    PASSWD_ENV=production \
+# PASSWD_ADDR is intentionally not pinned here: unset, the server binds to $PORT
+# when the platform injects one (Render/Railway/etc.), else :8080. Compose and Fly
+# set PASSWD_ADDR=:8080 explicitly.
+ENV PASSWD_ENV=production \
     PASSWD_DB=/data/passwd.db
 VOLUME ["/data"]
 EXPOSE 8080

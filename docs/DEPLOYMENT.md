@@ -3,50 +3,64 @@
 > ⚠️ Pre-audit. Do not host this for real users until the Phase 5 security audit
 > gate passes (see ROADMAP). The steps below are the mechanics for when it does.
 
-## Reference deployment: Cloudflare Pages + Fly.io
+## Reference deployment: Cloudflare Pages + Render + Neon (card-free)
 
-A concrete, no-custom-domain setup you can stand up today. Three pieces on three
-free-tier-friendly hosts, wired together by URL:
+A concrete, no-custom-domain, **no-payment-method** setup you can stand up today.
+The static pieces go on Cloudflare Pages (free); the backend runs as a free Render
+web service backed by a free Neon Postgres — so the server is stateless (no disk)
+and all data lives in Neon.
 
 | Piece | Host | URL (example) | Build config |
 |---|---|---|---|
 | Marketing site (`site/`) | Cloudflare Pages | `https://passwd-site.pages.dev` | root `site`, build `npm ci && npm run build`, output `dist` |
 | Web vault (`clients/apps/web`) | Cloudflare Pages | `https://passwd-vault.pages.dev` | root `clients`, build `npm ci && npm -w @passwd/web run build`, output `apps/web/dist` |
-| Backend (`backend/`) | Fly.io | `https://passwd-api.fly.dev` | `backend/fly.toml` (Docker) |
+| Database | Neon (free Postgres) | `postgres://…neon.tech/passwd` | — |
+| Backend (`backend/`) | Render (free web service) | `https://passwd-api.onrender.com` | `render.yaml` (Docker) |
 
-Substitute your own project/app names (the `*.pages.dev` and `*.fly.dev`
-subdomains are globally unique). The three URLs reference each other, so pick them
-first, then plug them into the steps below.
+Substitute your own project names (the `*.pages.dev`, `*.onrender.com`, and Neon
+subdomains are globally unique). The URLs reference each other, so pick them first,
+then plug them in. Free tradeoffs: the Render service **sleeps after ~15 min idle**
+(first request cold-starts ~30-60s) and Neon autosuspends — fine for staging, not
+for real users (which is gated on the audit anyway).
 
-### 1. Backend on Fly.io
+### 1. Database on Neon
 
-`backend/fly.toml` is committed. From `backend/`:
+1. Sign up at <https://neon.tech> (no card), create a project and a database named
+   `passwd`.
+2. Copy the **pooled** connection string. Ensure it ends with `?sslmode=require`,
+   e.g. `postgres://user:pass@ep-xxx-pooler.eu-central-1.aws.neon.tech/passwd?sslmode=require`.
+   You'll paste this as `PASSWD_DB` in the next step. The schema is created
+   automatically on first boot.
 
-```bash
-fly auth login                       # opens a browser (run via `! fly auth login`)
-# Edit fly.toml: set `app` to your name and `primary_region` near you.
-fly apps create passwd-api           # or let `fly launch --no-deploy` do it
-fly volumes create passwd_data --region lhr --size 1   # SQLite lives here
-# The two real secrets — generated at run time, never written to git:
-fly secrets set \
-  PASSWD_JWT_SECRET=$(openssl rand -hex 32) \
-  PASSWD_IDENTIFIER_PEPPER=$(openssl rand -hex 32)
-fly deploy
-fly open /healthz                    # should return {"status":"ok"}
-```
+### 2. Backend on Render
 
-The CORS + passkey env vars in `fly.toml` point at the web-vault origin
-(`PASSWD_ALLOWED_ORIGINS`, `PASSWD_WEBAUTHN_RP_ID`, `PASSWD_WEBAUTHN_RP_ORIGINS`);
-update them to your vault's `*.pages.dev` URL before `fly deploy`. `PASSWD_IDENTIFIER_PEPPER`
-is **permanent** — back it up; rotating it orphans every account.
+`render.yaml` (repo root) is a Blueprint for a free Docker web service. In Render:
+New → **Blueprint** → connect this repo → apply. Then in the service's
+**Environment** tab set the four `sync: false` vars:
 
-Rate limiting note: behind Fly's edge the app sees Fly's internal proxy as the
-peer, so `PASSWD_TRUSTED_PROXIES` is left unset (there is no stable proxy IP to
-trust) and the per-IP limiter effectively keys on the proxy. The **per-account
-login lockout is the real brute-force defense** and is unaffected; raise
-`PASSWD_AUTH_RATELIMIT_PER_MIN` if legitimate users get limited.
+- `PASSWD_DB` = your Neon URL from step 1
+- `PASSWD_JWT_SECRET` = output of `openssl rand -hex 32`
+- `PASSWD_IDENTIFIER_PEPPER` = output of a second `openssl rand -hex 32` —
+  **permanent**, back it up; rotating it orphans every account
+- (the CORS/passkey URLs are already in `render.yaml`; edit them there to your
+  vault's `*.pages.dev` URL, or override per-env in the dashboard)
 
-### 2. Web vault on Cloudflare Pages
+Render injects `PORT` and the server binds to it automatically (the Dockerfile no
+longer pins `PASSWD_ADDR`). Once live, `https://passwd-api.onrender.com/healthz`
+returns `{"status":"ok"}`.
+
+Rate-limiting note: behind Render's proxy the app sees the proxy as the peer, so
+`PASSWD_TRUSTED_PROXIES` stays unset and the per-IP limiter effectively keys on the
+proxy. The **per-account login lockout is the real brute-force defense** and is
+unaffected; raise `PASSWD_AUTH_RATELIMIT_PER_MIN` if legitimate users get limited.
+
+> **Alternative — Fly.io (needs a card, no cold starts, ~<$1/mo):** `backend/fly.toml`
+> is committed for the SQLite-on-a-volume path. From `backend/`: `fly auth login`;
+> edit `app`/region; `fly volumes create passwd_data --region lhr --size 1`;
+> `fly secrets set PASSWD_JWT_SECRET=$(openssl rand -hex 32) PASSWD_IDENTIFIER_PEPPER=$(openssl rand -hex 32)`;
+> `fly deploy`. Update the CORS/passkey env in `fly.toml` to your vault URL first.
+
+### 3. Web vault on Cloudflare Pages
 
 Create a Pages project connected to this repo (Cloudflare dashboard → Workers &
 Pages → Create → Pages → Connect to Git):
@@ -56,14 +70,14 @@ Pages → Create → Pages → Connect to Git):
 - **Build output directory:** `apps/web/dist`
 - **Environment variables:**
   - `NODE_VERSION` = `20`
-  - `VITE_API_BASE` = `https://passwd-api.fly.dev` (your backend URL)
+  - `VITE_API_BASE` = `https://passwd-api.onrender.com` (your backend URL)
   - `VITE_SITE_URL` = `https://passwd-site.pages.dev` (your marketing site URL)
 
 `clients/apps/web/public/_redirects` (committed) gives the SPA its deep-link
 fallback. Because the vault is a separate origin from the API, the backend's
-`PASSWD_ALLOWED_ORIGINS` must list this exact URL (step 1).
+`PASSWD_ALLOWED_ORIGINS` must list this exact URL (step 2).
 
-### 3. Marketing site on Cloudflare Pages
+### 4. Marketing site on Cloudflare Pages
 
 A second Pages project from the same repo:
 
@@ -77,12 +91,13 @@ A second Pages project from the same repo:
   - `PUBLIC_GITHUB_URL` = `https://github.com/Harry-H4rt/passwd`
   - `PUBLIC_RELEASES_URL` = `https://github.com/Harry-H4rt/passwd/releases/latest`
 
-### 4. Verify end-to-end
+### 5. Verify end-to-end
 
 1. `https://passwd-site.pages.dev` loads; "Open vault" → the vault URL; "Download" →
    GitHub releases.
 2. `https://passwd-vault.pages.dev` loads and can create/unlock an account (this
-   exercises CORS against the Fly backend and the passkey RP config).
+   exercises CORS against the Render backend and the passkey RP config; the first
+   request may cold-start the free Render service).
 3. Swapping in a real domain later is just: point DNS at each host, update the
    `PUBLIC_*` / `VITE_*` / `PASSWD_*` URLs, and re-deploy. Note passkeys are bound
    to `PASSWD_WEBAUTHN_RP_ID`, so changing the vault's host invalidates any already

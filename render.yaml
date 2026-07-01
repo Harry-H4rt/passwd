@@ -1,0 +1,44 @@
+# Render Blueprint for the passwd backend — the card-free path: a free Render web
+# service (Docker) plus an external free Neon Postgres. Must live at the repo root.
+#
+# Create it in Render: New > Blueprint > connect this repo. Then set the four
+# sync:false env vars in the dashboard (PASSWD_DB + the two secrets). See
+# docs/DEPLOYMENT.md ("Reference deployment") for the full runbook.
+#
+# The backend is stateless here (no disk): all data lives in Neon, so PASSWD_DB is
+# a postgres:// URL, not a file path. Free web services sleep after ~15 min idle;
+# the first request then cold-starts (~30-60s). Fine for staging, not real users.
+services:
+  - type: web
+    name: passwd-api
+    runtime: docker
+    rootDir: backend
+    plan: free
+    region: frankfurt # pick one near you
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: PASSWD_ENV
+        value: production
+      # Neon connection string, e.g.
+      # postgres://user:pass@ep-xxx.eu-central-1.aws.neon.tech/passwd?sslmode=require
+      # Secret -> set in the dashboard, never commit it.
+      - key: PASSWD_DB
+        sync: false
+      # Two real secrets. Generate each once with `openssl rand -hex 32` and paste
+      # into the dashboard. PASSWD_IDENTIFIER_PEPPER is PERMANENT — back it up;
+      # rotating it orphans every account. PASSWD_JWT_SECRET is safe to rotate.
+      - key: PASSWD_JWT_SECRET
+        sync: false
+      - key: PASSWD_IDENTIFIER_PEPPER
+        sync: false
+      # CORS + passkey (WebAuthn) config point at the web-vault origin (Cloudflare
+      # Pages). RP ID is host-only; passkeys bind to it, so keep it stable.
+      - key: PASSWD_ALLOWED_ORIGINS
+        value: https://passwd-vault.pages.dev
+      - key: PASSWD_WEBAUTHN_RP_ID
+        value: passwd-vault.pages.dev
+      - key: PASSWD_WEBAUTHN_RP_NAME
+        value: passwd
+      - key: PASSWD_WEBAUTHN_RP_ORIGINS
+        value: https://passwd-vault.pages.dev

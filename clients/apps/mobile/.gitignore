@@ -1,0 +1,9 @@
+# Populated by scripts/mobile.sh (a copy of apps/web/dist)
+www/
+
+# Native projects are generated with `cap add` on a machine with the SDKs
+# (Android Studio; Xcode+CocoaPods on a Mac). They're ignored until you start
+# customizing them (icons, permissions, native autofill), at which point commit
+# them so that work is versioned. Regenerate anytime from capacitor.config.ts.
+android/
+ios/

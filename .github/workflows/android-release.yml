@@ -1,0 +1,128 @@
+name: Android release
+
+# Builds the Capacitor mobile app (the web vault in a native WebView) into an
+# Android APK and attaches it to a GitHub Release, so it can be sideloaded
+# straight from the Releases page.
+#
+# Triggers:
+#   - pushing a tag like mobile-v0.1.0  -> publishes a release with that version
+#   - manual run (workflow_dispatch)    -> builds a dev APK release
+#
+# Signing: if the four ANDROID_* repo secrets are set, the APK is signed with
+# your release keystore (required for in-place updates and store submission).
+# Without them it falls back to a debug-signed APK, which installs fine for
+# sideloading but can't be updated in place by a later release-signed build.
+
+on:
+  push:
+    tags: ["mobile-v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: clients/package-lock.json
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install SDK packages
+        run: sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Install JS dependencies
+        working-directory: clients
+        run: npm ci
+
+      - name: Resolve version
+        id: ver
+        run: |
+          REF="${GITHUB_REF_NAME}"
+          if [[ "$REF" == mobile-v* ]]; then VER="${REF#mobile-v}"; else VER="0.0.0-dev"; fi
+          echo "name=$VER" >> "$GITHUB_OUTPUT"
+          echo "code=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+
+      - name: Build web vault and add Android project
+        working-directory: clients
+        env:
+          VITE_API_BASE: https://passwd-api-qvyk.onrender.com
+          VITE_SITE_URL: https://passwd-site.pages.dev
+        run: |
+          npm -w @passwd/web run build
+          rm -rf apps/mobile/www
+          cp -r apps/web/dist apps/mobile/www
+          cd apps/mobile
+          npx cap add android
+          # Version comes from the tag; versionCode from the run number so each
+          # release is higher than the last (the native project is regenerated
+          # each run, so patch it here rather than committing it).
+          sed -i "s/versionCode 1/versionCode ${{ steps.ver.outputs.code }}/" android/app/build.gradle
+          sed -i "s/versionName \"1.0\"/versionName \"${{ steps.ver.outputs.name }}\"/" android/app/build.gradle
+
+      - name: Build release APK
+        working-directory: clients/apps/mobile/android
+        run: ./gradlew assembleRelease
+
+      - name: Sign APK
+        id: sign
+        working-directory: clients/apps/mobile/android
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          OUT="$GITHUB_WORKSPACE/passwd-mobile-${{ steps.ver.outputs.name }}.apk"
+          if [ -n "${KS:-}" ]; then
+            echo "$KS" | base64 -d > ks.jks
+            "$BT/zipalign" -f 4 app/build/outputs/apk/release/app-release-unsigned.apk aligned.apk
+            "$BT/apksigner" sign --ks ks.jks --ks-pass env:KS_PASS \
+              --ks-key-alias "$KEY_ALIAS" --key-pass env:KEY_PASS --out "$OUT" aligned.apk
+            rm -f ks.jks aligned.apk
+            echo "signing=release keystore" >> "$GITHUB_OUTPUT"
+          else
+            ./gradlew assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk "$OUT"
+            echo "signing=debug key (sideload only)" >> "$GITHUB_OUTPUT"
+          fi
+          echo "apk=$OUT" >> "$GITHUB_OUTPUT"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.sign.outputs.apk }}
+          name: passwd mobile ${{ steps.ver.outputs.name }}
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('mobile-v{0}', steps.ver.outputs.name) }}
+          draft: false
+          prerelease: true
+          body: |
+            Android APK for the passwd mobile vault (Capacitor). Download the
+            `.apk` below and open it on your phone, allowing "install unknown
+            apps" for your browser or file manager when prompted.
+
+            Works on standard Android and GrapheneOS; the only permission used is
+            INTERNET. Passkeys are unavailable in a WebView, so sign in with
+            password + TOTP (same as the extension).
+
+            Signed with: ${{ steps.sign.outputs.signing }}.
+
+            Pre-audit: do not store irreplaceable secrets yet.

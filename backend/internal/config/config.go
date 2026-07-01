@@ -48,7 +48,7 @@ func Load() Config {
 		rpOrigins = allowedOrigins
 	}
 	return Config{
-		Addr:                getenv("PASSWD_ADDR", ":8080"),
+		Addr:                getenv("PASSWD_ADDR", defaultAddr()),
 		Environment:         getenv("PASSWD_ENV", "development"),
 		JWTSecret:           getSecret("PASSWD_JWT_SECRET", "dev-only-insecure-secret-change-me"),
 		DBPath:              getenv("PASSWD_DB", "data/passwd.db"),
@@ -63,6 +63,17 @@ func Load() Config {
 }
 
 func (c Config) IsProduction() bool { return c.Environment == "production" }
+
+// defaultAddr honors the PORT env var that many PaaS platforms inject (Render,
+// Railway, Heroku, Cloud Run) and route traffic to, so the server binds where the
+// platform expects without extra config. PASSWD_ADDR, when set, always wins (e.g.
+// Docker Compose and Fly pin :8080). Falls back to :8080 for local/dev.
+func defaultAddr() string {
+	if p := os.Getenv("PORT"); p != "" {
+		return ":" + p
+	}
+	return ":8080"
+}
 
 func getenv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {

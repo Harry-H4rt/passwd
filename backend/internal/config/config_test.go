@@ -36,6 +36,29 @@ func TestGetSecretFallsBackToEnvThenDefault(t *testing.T) {
 	}
 }
 
+func TestAddrPortFallback(t *testing.T) {
+	// PASSWD_ADDR wins when set, regardless of PORT.
+	t.Setenv("PASSWD_ADDR", ":9999")
+	t.Setenv("PORT", "10000")
+	if got := Load().Addr; got != ":9999" {
+		t.Fatalf("Addr = %q, want :9999 (PASSWD_ADDR should win)", got)
+	}
+
+	// Unset PASSWD_ADDR -> bind to the platform-injected PORT.
+	t.Setenv("PASSWD_ADDR", "")
+	t.Setenv("PORT", "10000")
+	if got := Load().Addr; got != ":10000" {
+		t.Fatalf("Addr = %q, want :10000 (from PORT)", got)
+	}
+
+	// Neither set -> :8080 default.
+	t.Setenv("PASSWD_ADDR", "")
+	t.Setenv("PORT", "")
+	if got := Load().Addr; got != ":8080" {
+		t.Fatalf("Addr = %q, want :8080 default", got)
+	}
+}
+
 func TestGetSecretMissingFileFallsThrough(t *testing.T) {
 	t.Setenv("PASSWD_JWT_SECRET_FILE", filepath.Join(t.TempDir(), "does-not-exist"))
 	t.Setenv("PASSWD_JWT_SECRET", "env-secret")

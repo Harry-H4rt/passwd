@@ -103,6 +103,23 @@ A second Pages project from the same repo:
    to `PASSWD_WEBAUTHN_RP_ID`, so changing the vault's host invalidates any already
    enrolled passkeys.
 
+### Republishing (Cloudflare direct upload)
+
+Cloudflare's Git-connected Pages flow is unavailable on some accounts (the
+dashboard funnels you into a Worker with a `wrangler deploy` step and a
+`*.workers.dev` URL, which breaks the `*.pages.dev` origins baked into
+`render.yaml`). Create and update both Pages projects by **direct upload**
+instead. `scripts/deploy.sh` wraps it: it bakes the production URLs into each
+build and uploads via Wrangler.
+
+```bash
+npx wrangler login          # once
+./scripts/deploy.sh all     # or: vault | site
+```
+
+There is no build-on-push with direct upload, so re-run this after changes.
+Override any URL via the environment (e.g. `VITE_API_BASE=… ./scripts/deploy.sh vault`).
+
 The generic, host-agnostic mechanics for each piece follow below.
 
 ## Backend (production)

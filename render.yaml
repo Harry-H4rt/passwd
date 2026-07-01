@@ -34,8 +34,11 @@ services:
         sync: false
       # CORS + passkey (WebAuthn) config point at the web-vault origin (Cloudflare
       # Pages). RP ID is host-only; passkeys bind to it, so keep it stable.
+      # Web vault origin, plus the two origins a Capacitor mobile app uses:
+      # capacitor://localhost (iOS) and https://localhost (Android). WebAuthn RP
+      # origins below stay web-only (passkeys don't run in a plain WebView).
       - key: PASSWD_ALLOWED_ORIGINS
-        value: https://passwd-vault.pages.dev
+        value: https://passwd-vault.pages.dev,capacitor://localhost,https://localhost
       - key: PASSWD_WEBAUTHN_RP_ID
         value: passwd-vault.pages.dev
       - key: PASSWD_WEBAUTHN_RP_NAME

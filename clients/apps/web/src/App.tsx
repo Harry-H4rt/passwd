@@ -8,7 +8,7 @@ import {
   newAccountId,
   TwoFactorRequiredError,
 } from "@passwd/api-client";
-import { masterPasswordIssue } from "@passwd/crypto";
+import { masterPasswordIssue, normalizeIdentifier } from "@passwd/crypto";
 import { VaultScreen } from "./VaultScreen";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
@@ -71,6 +71,10 @@ function AuthScreen(props: {
   const [generated, setGenerated] = useState(false);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  // Only for a typed email at registration: a re-entry to catch typos, since
+  // there is no password reset and a mistyped handle locks the account out for
+  // good. Blank/irrelevant for dice-generated passphrases.
+  const [confirmId, setConfirmId] = useState("");
   // Forgot-master-password flow: prove possession of the recovery code, then set a
   // new master password. Lives inside login mode (toggled by a link).
   const [recover, setRecover] = useState(false);
@@ -88,6 +92,7 @@ function AuthScreen(props: {
   function generate() {
     setIdentifier(newAccountId());
     setGenerated(true);
+    setConfirmId("");
   }
 
   function switchMode(next: "register" | "login") {
@@ -97,6 +102,7 @@ function AuthScreen(props: {
     setTotp("");
     setRecover(false);
     setRecoveryCode("");
+    setConfirmId("");
   }
 
   async function submit(e: React.FormEvent) {
@@ -131,6 +137,18 @@ function AuthScreen(props: {
       return;
     }
     if (mode === "register") {
+      // A typed email (not a dice passphrase) is the only handle a user can
+      // fat-finger; verify it here since there is no reset if it's wrong.
+      if (!generated && identifier.includes("@")) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(identifier.trim())) {
+          setError("That doesn't look like a valid email. Check it, or roll the dice for a private passphrase.");
+          return;
+        }
+        if (normalizeIdentifier(identifier) !== normalizeIdentifier(confirmId)) {
+          setError("The email addresses don't match.");
+          return;
+        }
+      }
       const weak = masterPasswordIssue(password);
       if (weak) {
         setError(weak);
@@ -242,6 +260,21 @@ function AuthScreen(props: {
         </div>
         {mode === "register" && (
           <p className="hint">Roll the dice for a private passphrase, or type your own email. No email needed.</p>
+        )}
+
+        {mode === "register" && !generated && identifier.includes("@") && (
+          <>
+            <label>Confirm email</label>
+            <input
+              value={confirmId}
+              onChange={(e) => setConfirmId(e.target.value)}
+              placeholder="type your email again"
+              autoComplete="off"
+              spellCheck={false}
+              inputMode="email"
+            />
+            <p className="hint">There is no password reset, so a typo here locks the account out for good. We never send email or store it in the clear.</p>
+          </>
         )}
 
         {recover && (

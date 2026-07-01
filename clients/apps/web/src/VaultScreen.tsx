@@ -26,11 +26,33 @@ import {
   type SharedItem,
   type WebAuthnCredentialSummary,
 } from "@passwd/api-client";
+import { normalizeIdentifier } from "@passwd/crypto";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
 import { AsyncButton } from "./components/AsyncButton";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { ImportExport } from "./ImportExport";
+
+// Local marker of the newest security event this account has already been shown,
+// keyed by a SHA-256 of the normalized identifier so the plaintext handle (which
+// may be a secret passphrase) never lands in localStorage.
+async function lastSeenKey(identifier: string): Promise<string> {
+  const data = new TextEncoder().encode(normalizeIdentifier(identifier));
+  const digest = await crypto.subtle.digest("SHA-256", data);
+  return (
+    "passwd:lastSeenActivity:" +
+    Array.from(new Uint8Array(digest))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+  );
+}
+
+function buildLoginAlert(failures: number, reuse: boolean): string {
+  const parts: string[] = [];
+  if (failures > 0) parts.push(`${failures} failed sign-in attempt${failures === 1 ? "" : "s"}`);
+  if (reuse) parts.push("session token reuse");
+  return `Since your last visit: ${parts.join(" and ")}. If that wasn't you, review your activity.`;
+}
 
 export function VaultScreen(props: {
   session: Session;
@@ -54,6 +76,7 @@ export function VaultScreen(props: {
   const [toast, setToast] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [loginAlert, setLoginAlert] = useState<string | null>(null);
 
   function flash(msg: string) {
     setToast(msg);
@@ -76,6 +99,43 @@ export function VaultScreen(props: {
     void reload();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Proactive login awareness. On unlock, compare the server-side security log
+  // against the newest event this device has already seen, and surface a banner
+  // for any failed sign-ins or session-token reuse since then. Pull-based and
+  // zero-knowledge: nothing is emailed and the server learns nothing new.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const events = await getActivity(session);
+        if (cancelled) return;
+        const key = await lastSeenKey(session.identifier);
+        const lastSeenRaw = localStorage.getItem(key);
+        // First run on this device: set a baseline, don't alarm about history.
+        if (lastSeenRaw !== null) {
+          const lastSeen = Number(lastSeenRaw);
+          const since = events.filter(
+            (e) =>
+              new Date(e.createdAt).getTime() > lastSeen &&
+              (e.event === "login.failure" || e.event === "token.reuse_detected"),
+          );
+          const failures = since.filter((e) => e.event === "login.failure").length;
+          const reuse = since.some((e) => e.event === "token.reuse_detected");
+          if (!cancelled && (failures > 0 || reuse)) setLoginAlert(buildLoginAlert(failures, reuse));
+        }
+        // Mark up to the newest event's server timestamp (same clock we compare
+        // against next time), falling back to now when the log is empty.
+        const newest = events.length ? new Date(events[0].createdAt).getTime() : Date.now();
+        localStorage.setItem(key, String(newest));
+      } catch {
+        // Non-critical: the Activity panel is still available on demand.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
 
   // Returns true on success so the editor's button can show its "Saved" state
   // before the modal closes.
@@ -182,6 +242,28 @@ export function VaultScreen(props: {
       </aside>
 
       <section className="list-col">
+        {loginAlert && (
+          <div className="warn-banner">
+            <div className="warn-banner-text">
+              <Icon name="clock" size={16} />
+              <span>{loginAlert}</span>
+            </div>
+            <div className="warn-banner-actions">
+              <button
+                className="linklike"
+                onClick={() => {
+                  setShowActivity(true);
+                  setLoginAlert(null);
+                }}
+              >
+                Review
+              </button>
+              <button className="linklike" onClick={() => setLoginAlert(null)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+        )}
         <div className="search-field">
           <Icon name="search" size={16} />
           <input className="search" placeholder="Search" value={query} onChange={(e) => setQuery(e.target.value)} />

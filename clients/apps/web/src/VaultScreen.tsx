@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   type Session,
   type VaultItem,
@@ -31,6 +31,7 @@ import {
   type WebAuthnCredentialSummary,
 } from "@passwd/api-client";
 import { normalizeIdentifier } from "@passwd/crypto";
+import { passwordWeakness, reusedItemIds, breachedItemIds } from "./health";
 import { Icon } from "./components/Icon";
 import { PasswordField } from "./components/PasswordField";
 import { AsyncButton } from "./components/AsyncButton";
@@ -74,6 +75,7 @@ export function VaultScreen(props: {
   const [showPasskeys, setShowPasskeys] = useState(false);
   const [showRecovery, setShowRecovery] = useState(false);
   const [showActivity, setShowActivity] = useState(false);
+  const [showSecurity, setShowSecurity] = useState(false);
   const [showShared, setShowShared] = useState(false);
   const [sharing, setSharing] = useState<VaultItem | null>(null);
   const [showData, setShowData] = useState(false);
@@ -220,6 +222,9 @@ export function VaultScreen(props: {
           <button className="nav-item" onClick={() => setShowActivity(true)}>
             <Icon name="clock" size={16} /> Activity
           </button>
+          <button className="nav-item" onClick={() => setShowSecurity(true)}>
+            <Icon name="check" size={16} /> Security check
+          </button>
           <button className="nav-item" onClick={() => setShowShared(true)}>
             <Icon name="share" size={16} /> Shared with me
           </button>
@@ -341,6 +346,7 @@ export function VaultScreen(props: {
       {showPasskeys && <Passkeys session={session} onClose={() => setShowPasskeys(false)} />}
       {showRecovery && <RecoveryCode session={session} onClose={() => setShowRecovery(false)} />}
       {showActivity && <Activity session={session} onClose={() => setShowActivity(false)} />}
+      {showSecurity && <SecurityCheck items={items} onClose={() => setShowSecurity(false)} />}
       {showShared && (
         <SharedWithMe session={session} onClose={() => setShowShared(false)} onCopy={copy} />
       )}
@@ -909,6 +915,93 @@ function Activity(props: { session: Session; onClose: () => void }) {
             ))}
           </ul>
         )}
+        <div className="row end">
+          <button className="ghost" onClick={props.onClose}>
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SecurityCheck(props: { items: VaultItem[]; onClose: () => void }) {
+  const [breaches, setBreaches] = useState<Map<string, number> | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Local-only analysis; recomputed if the vault changes underneath.
+  const weakById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const it of props.items) {
+      const w = passwordWeakness(it.password);
+      if (w) m.set(it.id, w);
+    }
+    return m;
+  }, [props.items]);
+  const reused = useMemo(() => reusedItemIds(props.items), [props.items]);
+
+  async function runBreachCheck() {
+    setError(null);
+    setBusy(true);
+    try {
+      setBreaches(await breachedItemIds(props.items));
+    } catch (e) {
+      setError(errMsg(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const withPasswords = props.items.filter((it) => it.password).length;
+  const flagged = props.items.filter(
+    (it) => weakById.has(it.id) || reused.has(it.id) || (breaches?.get(it.id) ?? 0) > 0,
+  );
+
+  return (
+    <div className="modal-backdrop" onClick={props.onClose}>
+      <div className="card modal" onClick={(e) => e.stopPropagation()}>
+        <h2>Security check</h2>
+        <p className="muted">
+          Weak and reused passwords are detected here on your device. The breach check compares each password against
+          the HaveIBeenPwned database by sending only a short, unrecoverable fragment of its hash — your passwords never
+          leave this browser, and the passwd server is never involved.
+        </p>
+
+        <div className="row">
+          <button className="ghost" disabled={busy || withPasswords === 0} onClick={runBreachCheck}>
+            {busy
+              ? "Checking..."
+              : breaches
+                ? "Re-check breaches"
+                : `Check ${withPasswords} password${withPasswords === 1 ? "" : "s"} for breaches`}
+          </button>
+        </div>
+        {error && <div className="error">{error}</div>}
+
+        {flagged.length === 0 ? (
+          <p className="muted">
+            {withPasswords === 0 ? "No stored passwords to check yet." : "No weak or reused passwords found."}
+            {breaches && withPasswords > 0 ? " No breached passwords either." : ""}
+          </p>
+        ) : (
+          <ul className="activity-list">
+            {flagged.map((it) => {
+              const n = breaches?.get(it.id) ?? 0;
+              return (
+                <li key={it.id} className="activity-row health-row">
+                  <span className="activity-label">{it.name || "(unnamed)"}</span>
+                  <span className="health-badges">
+                    {n > 0 && <span className="badge badge-danger">Breached &times;{n.toLocaleString()}</span>}
+                    {reused.has(it.id) && <span className="badge badge-warn">Reused</span>}
+                    {weakById.has(it.id) && <span className="badge badge-warn">{weakById.get(it.id)}</span>}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
         <div className="row end">
           <button className="ghost" onClick={props.onClose}>
             Close

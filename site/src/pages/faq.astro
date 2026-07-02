@@ -5,19 +5,59 @@ import { VAULT_URL, GITHUB_URL, RELEASES_URL } from "../config";
 
 const faqs = [
   ["Do I need to give an email?", "No. You can create an account with a generated passphrase: no email, phone, or personal details. Email is an optional convenience, and even then it's only ever stored as a blinded hash."],
-  ["What happens if I forget my master password?", "There is no password reset, by design. Since only your device can decrypt your vault, no one (including us) can recover it. Keep your recovery passphrase somewhere safe."],
+  ["What happens if I forget my master password?", "There is no password reset, by design. Since only your device can decrypt your vault, no one (including us) can recover it. Keep your recovery code somewhere safe."],
   ["How is this different from my browser's password manager?", "Your vault is end-to-end encrypted and portable across browsers and devices, with a zero-knowledge server that can't read it, and it isn't tied to one browser account."],
   ["Is it really zero-knowledge?", "Yes. Encryption and decryption happen on your device; the server only stores ciphertext. See the Security page for the details and the open-source code."],
-  ["Can I self-host it?", "Yes. The backend is a single static Go binary with SQLite. Run it yourself and point the apps at it."],
+  ["Can I self-host it?", "Yes. The backend is a single static Go binary. Run it yourself and point the apps at it."],
   ["Is it finished?", "It's actively being built and is pre-audit. Try it, but hold off on storing irreplaceable secrets until the independent security review is complete."],
+];
+
+const downloads = [
+  {
+    icon: "globe",
+    title: "Web vault",
+    body: "Open the vault in any modern browser, with nothing to install.",
+    meta: "Works everywhere",
+    href: VAULT_URL,
+    label: "Open vault",
+    primary: true,
+  },
+  {
+    icon: "monitor",
+    title: "Desktop app",
+    body: "A standalone, offline vault for your computer.",
+    meta: "Linux (AppImage, .deb) today; signed macOS and Windows builds coming soon",
+    href: RELEASES_URL,
+    label: "Download",
+    primary: true,
+  },
+  {
+    icon: "smartphone",
+    title: "Android app",
+    body: "The full vault on your phone, with biometric unlock.",
+    meta: "Sideload the APK from GitHub Releases; Play Store listing later",
+    href: `${GITHUB_URL}/releases`,
+    label: "Get the APK",
+    primary: true,
+  },
+  {
+    icon: "puzzle",
+    title: "Browser extension",
+    body: "Chrome and Firefox popup with autofill and domain matching.",
+    meta: "Store listings coming soon",
+    href: GITHUB_URL,
+    label: "Build from source",
+    primary: false,
+  },
 ];
 ---
 
 <Base title="FAQ and Download | passwd" active="faq">
-  <section class="hero" style="padding-bottom:40px;">
+  <section class="page-head">
     <div class="container">
       <span class="eyebrow">FAQ &amp; Download</span>
       <h1>Questions, answered.</h1>
+      <p class="lead">And every way to get passwd on your devices.</p>
     </div>
   </section>
 
@@ -35,30 +75,22 @@ const faqs = [
   <section class="block band" id="download">
     <div class="container">
       <div class="section-head">
+        <span class="eyebrow">Download</span>
         <h2>Get passwd</h2>
-        <p class="lead">Use it in your browser today; native apps are on the way.</p>
+        <p class="lead">One encrypted vault across your browser, desktop, and phone.</p>
       </div>
-      <div class="grid" style="max-width:860px;margin-inline:auto;">
-        <div class="card">
-          <span class="icon"><Icon name="globe" size={22} /></span>
-          <h3>Web vault</h3>
-          <p>Open the vault in any modern browser, with nothing to install.</p>
-          <p style="margin-top:14px;"><a class="btn btn-primary" href={VAULT_URL}>Open vault</a></p>
-        </div>
-        <div class="card">
-          <span class="icon"><Icon name="puzzle" size={22} /></span>
-          <h3>Browser extension</h3>
-          <p>Chrome and Firefox popup with autofill. Store listings coming soon.</p>
-          <p style="margin-top:14px;"><a class="btn btn-ghost" href={GITHUB_URL}>Build from source</a></p>
-        </div>
-        <div class="card">
-          <span class="icon"><Icon name="monitor" size={22} /></span>
-          <h3>Desktop app</h3>
-          <p>A standalone, offline vault for Linux today (AppImage/.deb); signed macOS and Windows builds coming soon.</p>
-          <p style="margin-top:14px;"><a class="btn btn-primary" href={RELEASES_URL}>Download</a></p>
-        </div>
+      <div class="grid">
+        {downloads.map((d) => (
+          <div class="card dl-card">
+            <span class="icon"><Icon name={d.icon} size={20} /></span>
+            <h3>{d.title}</h3>
+            <p>{d.body}</p>
+            <p class="dl-meta">{d.meta}</p>
+            <a class={`btn ${d.primary ? "btn-primary" : "btn-ghost"}`} href={d.href}>{d.label}</a>
+          </div>
+        ))}
       </div>
-      <p style="text-align:center;margin-top:26px;">
+      <p style="margin-top:30px;">
         Prefer to run it yourself? <a href={GITHUB_URL}>Self-host from the source →</a>
       </p>
     </div>

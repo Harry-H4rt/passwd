@@ -7,30 +7,82 @@ const features = [
   { icon: "shield", title: "Zero-knowledge", body: "Everything is encrypted on your device. The server only ever stores ciphertext it can't read." },
   { icon: "eyeOff", title: "No email required", body: "Create an account with a generated passphrase. No email, no phone, nothing that identifies you." },
   { icon: "puzzle", title: "Browser extension", body: "Unlock once and autofill logins on the sites you visit, with strict domain matching." },
-  { icon: "twofa", title: "Two-factor", body: "Add TOTP two-factor in a click. Your vault stays protected even if a password leaks." },
+  { icon: "twofa", title: "Two-factor", body: "Add TOTP or passkey two-factor in a click. Your vault stays protected even if a password leaks." },
   { icon: "code", title: "Open source", body: "Every line is public and auditable. Trust nothing you can't inspect." },
   { icon: "bolt", title: "Fast and lightweight", body: "A Go sync backend and a tiny web vault. Self-host it from a single binary." },
 ];
 
-const trust = ["End-to-end encrypted", "No email needed", "Open source", "Browser extension"];
+const canDo = [
+  "Store and sync encrypted blobs",
+  "Verify your login without seeing your password",
+  "Enforce two-factor, rate limits, and lockout",
+];
+const cantDo = [
+  "Read your passwords, notes, or item names",
+  "Learn your master password",
+  "Know who its users are",
+];
+
+const trust = ["End-to-end encrypted", "No email needed", "Open source"];
+
+const mockItems = [
+  { fav: "G", name: "github.com", user: "octocat" },
+  { fav: "M", name: "mail.example.com", user: "you@example.com" },
+  { fav: "B", name: "bank.example.com", user: "you" },
+  { fav: "S", name: "social.example.com", user: "yourhandle" },
+];
 ---
 
 <Base active="">
   <section class="hero">
-    <div class="container">
-      <span class="eyebrow">Privacy is the default</span>
-      <h1>A password manager that can't read your passwords.</h1>
-      <p class="lead">
-        passwd is zero-knowledge and end-to-end encrypted. Your master password and your
-        vault never leave your device in a form anyone else, including us, can read.
-      </p>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href={VAULT_URL}>Create free vault</a>
-        <a class="btn btn-ghost" href="/faq#download">Download the app</a>
-        <a class="btn btn-ghost" href="/security">How it works</a>
+    <div class="container hero-grid">
+      <div>
+        <span class="eyebrow">Privacy is the default</span>
+        <h1>A password manager that can't read your passwords.</h1>
+        <p class="lead">
+          passwd is zero-knowledge and end-to-end encrypted. Your master password and your
+          vault never leave your device in a form anyone else, including us, can read.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href={VAULT_URL}>Create free vault</a>
+          <a class="btn btn-ghost" href="/faq#download">Download the app</a>
+        </div>
+        <div class="trust">
+          {trust.map((t) => <span><Icon name="check" size={15} />{t}</span>)}
+        </div>
       </div>
-      <div class="trust">
-        {trust.map((t) => <span><Icon name="check" size={16} />{t}</span>)}
+
+      <div class="mock-wrap" aria-hidden="true">
+        <div class="mock">
+          <div class="mock-bar">
+            <span class="dot"></span><span class="dot"></span><span class="dot"></span>
+            <span class="addr">vault.passwd.app</span>
+          </div>
+          <div class="mock-body">
+            <div class="mock-side">
+              <span class="side-brand"><Icon name="lock" size={14} />passwd</span>
+              <span class="on">All items</span>
+              <span>Favorites</span>
+              <span>Security check</span>
+              <span>Generator</span>
+              <span>Account</span>
+            </div>
+            <div class="mock-list">
+              <div class="mock-search">Search vault...</div>
+              {mockItems.map((i) => (
+                <div class="mock-item">
+                  <span class="fav">{i.fav}</span>
+                  <span>
+                    <span class="m-name">{i.name}</span><br />
+                    <span class="m-user">{i.user}</span>
+                  </span>
+                  <span class="m-pass">••••••••••</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <span class="mock-badge"><Icon name="twofa" size={16} />Encrypted on your device</span>
       </div>
     </div>
   </section>
@@ -38,13 +90,14 @@ const trust = ["End-to-end encrypted", "No email needed", "Open source", "Browse
   <section class="block">
     <div class="container">
       <div class="section-head">
+        <span class="eyebrow">Why passwd</span>
         <h2>Built so we know nothing about you</h2>
         <p class="lead">Strong cryptography by default, with none of the data collection.</p>
       </div>
-      <div class="grid">
+      <div class="grid cols-3">
         {features.map((f) => (
           <div class="card">
-            <span class="icon"><Icon name={f.icon} size={22} /></span>
+            <span class="icon"><Icon name={f.icon} size={20} /></span>
             <h3>{f.title}</h3>
             <p>{f.body}</p>
           </div>
@@ -56,31 +109,36 @@ const trust = ["End-to-end encrypted", "No email needed", "Open source", "Browse
   <section class="block band">
     <div class="container">
       <div class="section-head">
+        <span class="eyebrow">The security model</span>
         <h2>How your vault stays private</h2>
         <p class="lead">
           Your master password derives an encryption key on your device. Only encrypted blobs
           are ever sent to the server, so there is no copy of your password anywhere to steal.
         </p>
       </div>
-      <table class="table" style="max-width:760px;margin-inline:auto;">
-        <thead><tr><th>The server can</th><th>The server can <em>never</em></th></tr></thead>
-        <tbody>
-          <tr><td><span class="can">Yes</span> Store and sync encrypted blobs</td><td><span class="cant">No</span> Read your passwords or notes</td></tr>
-          <tr><td><span class="can">Yes</span> Verify your login</td><td><span class="cant">No</span> Learn your master password</td></tr>
-          <tr><td><span class="can">Yes</span> Enforce 2FA and rate limits</td><td><span class="cant">No</span> Know who its users are</td></tr>
-        </tbody>
-      </table>
-      <p style="text-align:center;"><a href="/security">Read the full security model</a></p>
+      <div class="duo">
+        <div class="panel can">
+          <h3><Icon name="check" size={18} />The server can</h3>
+          <ul>{canDo.map((t) => <li>{t}</li>)}</ul>
+        </div>
+        <div class="panel cant">
+          <h3><Icon name="x" size={18} />The server can never</h3>
+          <ul>{cantDo.map((t) => <li>{t}</li>)}</ul>
+        </div>
+      </div>
+      <p style="margin-top:28px;"><a href="/security">Read the full security model →</a></p>
     </div>
   </section>
 
-  <section class="block cta">
-    <div class="container section-head">
-      <h2>Take back your privacy in two minutes</h2>
-      <p class="lead">Generate a passphrase, set a master password, and you're done. No sign-up forms.</p>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href={VAULT_URL}>Create free vault</a>
-        <a class="btn btn-ghost" href="/features">See all features</a>
+  <section class="block">
+    <div class="container">
+      <div class="cta-box">
+        <h2>Take back your privacy in two minutes</h2>
+        <p class="lead">Generate a passphrase, set a master password, and you're done. No sign-up forms.</p>
+        <div class="hero-actions" style="justify-content:center;">
+          <a class="btn btn-primary" href={VAULT_URL}>Create free vault</a>
+          <a class="btn btn-ghost" href="/features">See all features</a>
+        </div>
       </div>
     </div>
   </section>

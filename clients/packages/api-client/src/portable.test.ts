@@ -13,6 +13,8 @@ const item = f({
   password: "p@ss,word\n\"quoted\"",
   totp: "JBSWY3DPEHPK3PXP",
   notes: "line1\nline2",
+  favorite: true,
+  folder: "Work",
 });
 
 test("plaintext JSON export round-trips through import", () => {
@@ -68,6 +70,14 @@ test("v1 exports (no type field) import as logins", () => {
     items: [{ name: "Old", url: "", username: "u", password: "p", notes: "" }],
   });
   assert.deepEqual(parseVaultImport(v1), [f({ name: "Old", username: "u", password: "p" })]);
+});
+
+test("imports Bitwarden folder/favorite CSV columns", () => {
+  const csv = "folder,favorite,name,login_username,login_password\nSocial,1,X,me,pw\n,,Y,you,pw2";
+  assert.deepEqual(parseVaultImport(csv), [
+    f({ name: "X", username: "me", password: "pw", folder: "Social", favorite: true }),
+    f({ name: "Y", username: "you", password: "pw2" }),
+  ]);
 });
 
 test("skips fully empty rows and unknown columns", () => {

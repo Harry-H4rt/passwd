@@ -4,8 +4,9 @@
 
 import { normalizeItemFields, type ItemFields } from "./session.js";
 
-// Flat columns for CSV (logins only carry these; cards/identities need JSON).
-const FIELDS = ["name", "url", "username", "password", "totp", "notes"] as const;
+// Flat string columns for CSV (logins only carry these; cards/identities need
+// JSON). `favorite` is boolean and handled separately.
+const FIELDS = ["name", "url", "username", "password", "totp", "notes", "folder"] as const;
 type Field = (typeof FIELDS)[number];
 
 export const EXPORT_FORMAT = "passwd-export";
@@ -31,8 +32,9 @@ export function toPlaintextJSON(items: ItemFields[]): string {
 }
 
 export function toCSV(items: ItemFields[]): string {
-  const rows = [FIELDS.join(",")];
-  for (const it of items) rows.push(FIELDS.map((f) => csvEscape(it[f] ?? "")).join(","));
+  const rows = [[...FIELDS, "favorite"].join(",")];
+  for (const it of items)
+    rows.push([...FIELDS.map((f) => csvEscape(it[f] ?? "")), it.favorite ? "1" : ""].join(","));
   return rows.join("\r\n");
 }
 
@@ -73,7 +75,10 @@ function parseCSV(text: string): ItemFields[] {
   const rows = csvRows(text);
   const header = rows.shift();
   if (!header) return [];
-  const cols = header.map((h) => ALIASES[h.trim().toLowerCase()] ?? null);
+  const cols = header.map((h) => {
+    const lower = h.trim().toLowerCase();
+    return ALIASES[lower] ?? (FAVORITE_KEYS.includes(lower) ? ("favorite" as const) : null);
+  });
   return rows
     .map((cells) => {
       const obj: Record<string, unknown> = {};
@@ -111,7 +116,13 @@ const ALIASES: Record<string, Field> = {
   totp: "totp",
   otp: "totp",
   login_totp: "totp",
+  folder: "folder",
+  group: "folder",
+  grouping: "folder",
 };
+
+// Truthy favorite spellings across managers' CSVs.
+const FAVORITE_KEYS = ["favorite", "favourite", "fav"];
 
 function normalize(row: Record<string, unknown>): ItemFields {
   // Map foreign column names onto our flat fields and carry the structured
@@ -122,9 +133,12 @@ function normalize(row: Record<string, unknown>): ItemFields {
     if (row[k] !== undefined) flat[k] = row[k];
   }
   for (const [key, value] of Object.entries(row)) {
-    const field = (FIELDS as readonly string[]).includes(key)
-      ? (key as Field)
-      : ALIASES[key.trim().toLowerCase()];
+    const lower = key.trim().toLowerCase();
+    if (FAVORITE_KEYS.includes(lower)) {
+      flat.favorite = value;
+      continue;
+    }
+    const field = (FIELDS as readonly string[]).includes(key) ? (key as Field) : ALIASES[lower];
     if (field && !flat[field]) flat[field] = value == null ? "" : String(value);
   }
   return normalizeItemFields(flat);

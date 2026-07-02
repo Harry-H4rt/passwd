@@ -323,10 +323,13 @@ function Vault(props: { onLock: () => void }) {
     return null;
   }
 
-  // Items whose saved URL matches the current tab's domain come first.
+  // Items whose saved URL matches the current tab's domain come first, then
+  // favorites, then the rest in vault order.
   const sorted = useMemo(() => {
     const matches = (i: ItemView) => (tabHost ? hostMatches(i.url, tabHost) : false);
-    return [...items].sort((a, b) => Number(matches(b)) - Number(matches(a)));
+    return [...items].sort(
+      (a, b) => Number(matches(b)) - Number(matches(a)) || Number(b.favorite) - Number(a.favorite),
+    );
   }, [items, tabHost]);
 
   const filtered = sorted.filter(

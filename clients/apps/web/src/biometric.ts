@@ -21,53 +21,6 @@ export function isNative(): boolean {
   return Capacitor.isNativePlatform();
 }
 
-// True when running inside the mobile app's WebView, judged by the serving
-// origin rather than the Capacitor bridge. The Android shell serves from
-// https://localhost and iOS from capacitor://localhost, so this stays true even
-// if bridge injection failed (exactly the case the diagnostic must catch);
-// browsers and the dev server (http:, or a port) never match.
-export function isAppShell(): boolean {
-  return (
-    isNative() ||
-    window.location.origin === "https://localhost" ||
-    window.location.origin === "capacitor://localhost"
-  );
-}
-
-function msg(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
-async function withTimeout<T>(p: Promise<T>, ms: number): Promise<T | "timeout"> {
-  return Promise.race([p, new Promise<"timeout">((res) => setTimeout(() => res("timeout"), ms))]);
-}
-
-// Debug helper: reports why biometrics are (un)available, step by step via
-// onStep so a hung native call still leaves the completed steps visible.
-// Shown as small text on the sign-in screen inside the app shell only.
-export async function biometricDiagnostic(onStep: (line: string) => void): Promise<void> {
-  const parts: string[] = [];
-  const push = (s: string) => {
-    parts.push(s);
-    onStep(parts.join(" | "));
-  };
-  push(`build=${import.meta.env.VITE_BUILD_STAMP ?? "dev"}`);
-  push(`bridge=${typeof (window as { Capacitor?: unknown }).Capacitor !== "undefined"}`);
-  push(`platform=${Capacitor.getPlatform()}`);
-  push(`plugin=${Capacitor.isPluginAvailable("NativeBiometric")}`);
-  try {
-    const r = await withTimeout(NativeBiometric.isAvailable(), 4000);
-    if (r === "timeout") {
-      push("isAvailable=timeout");
-      return;
-    }
-    const rec = r as unknown as Record<string, unknown>;
-    push(`isAvailable=${rec.isAvailable} type=${rec.biometryType} err=${rec.errorCode ?? rec.code ?? "none"}`);
-  } catch (e) {
-    push("isAvailable threw: " + msg(e));
-  }
-}
-
 // True only on a device with enrolled biometrics (fingerprint / face).
 export async function biometricAvailable(): Promise<boolean> {
   if (!isNative()) return false;

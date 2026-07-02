@@ -1,23 +1,24 @@
 // Biometric unlock for the native mobile app. Every function is a safe no-op in
-// the browser (guarded by Capacitor.isNativePlatform), and the plugin is loaded
-// via dynamic import only on native, so it never lands in the web bundle's main
-// path.
+// the browser (guarded by Capacitor.isNativePlatform).
+//
+// The plugin is imported statically on purpose: its JS side is a tiny
+// registerPlugin() wrapper (@capacitor/core is in the main bundle anyway), and
+// loading it as a lazy chunk hangs forever inside the Capacitor WebView --
+// Vite's preload helper waits on a modulepreload event that never fires under
+// the app shell's https://localhost scheme (found via the 0.1.5 on-screen
+// diagnostic: "import=timeout").
 //
 // Trade-off (the standard one for password-manager biometric unlock): when a
 // user opts in, their master password is stored in the device's hardware-backed
 // secure store (iOS Keychain / Android Keystore) and released only after a
 // successful biometric check. The passwd server is never involved.
 import { Capacitor } from "@capacitor/core";
+import { NativeBiometric } from "@capgo/capacitor-native-biometric";
 
 const SERVER = "app.passwd.vault"; // keychain/keystore namespace for our credentials
 
 export function isNative(): boolean {
   return Capacitor.isNativePlatform();
-}
-
-async function plugin() {
-  const { NativeBiometric } = await import("@capgo/capacitor-native-biometric");
-  return NativeBiometric;
 }
 
 // True when running inside the mobile app's WebView, judged by the serving
@@ -54,20 +55,8 @@ export async function biometricDiagnostic(onStep: (line: string) => void): Promi
   push(`bridge=${typeof (window as { Capacitor?: unknown }).Capacitor !== "undefined"}`);
   push(`platform=${Capacitor.getPlatform()}`);
   push(`plugin=${Capacitor.isPluginAvailable("NativeBiometric")}`);
-  let nb;
   try {
-    const r = await withTimeout(plugin(), 4000);
-    if (r === "timeout") {
-      push("import=timeout");
-      return;
-    }
-    nb = r;
-  } catch (e) {
-    push("import failed: " + msg(e));
-    return;
-  }
-  try {
-    const r = await withTimeout(nb.isAvailable(), 4000);
+    const r = await withTimeout(NativeBiometric.isAvailable(), 4000);
     if (r === "timeout") {
       push("isAvailable=timeout");
       return;
@@ -83,7 +72,7 @@ export async function biometricDiagnostic(onStep: (line: string) => void): Promi
 export async function biometricAvailable(): Promise<boolean> {
   if (!isNative()) return false;
   try {
-    const r = await (await plugin()).isAvailable();
+    const r = await NativeBiometric.isAvailable();
     return !!r.isAvailable;
   } catch {
     return false;
@@ -94,7 +83,7 @@ export async function biometricAvailable(): Promise<boolean> {
 export async function biometricEnrolled(): Promise<boolean> {
   if (!isNative()) return false;
   try {
-    const c = await (await plugin()).getCredentials({ server: SERVER });
+    const c = await NativeBiometric.getCredentials({ server: SERVER });
     return !!c?.password;
   } catch {
     return false;
@@ -104,7 +93,7 @@ export async function biometricEnrolled(): Promise<boolean> {
 // Store the master password behind the device biometric (opt-in).
 export async function enableBiometric(identifier: string, masterPassword: string): Promise<void> {
   if (!isNative()) return;
-  await (await plugin()).setCredentials({ username: identifier, password: masterPassword, server: SERVER });
+  await NativeBiometric.setCredentials({ username: identifier, password: masterPassword, server: SERVER });
 }
 
 // Prompt for biometrics and return the stored credentials, or null if the user
@@ -112,9 +101,8 @@ export async function enableBiometric(identifier: string, masterPassword: string
 export async function unlockWithBiometric(): Promise<{ identifier: string; password: string } | null> {
   if (!isNative()) return null;
   try {
-    const nb = await plugin();
-    await nb.verifyIdentity({ title: "Unlock passwd", subtitle: "Confirm your identity", reason: "Unlock your vault" });
-    const c = await nb.getCredentials({ server: SERVER });
+    await NativeBiometric.verifyIdentity({ title: "Unlock passwd", subtitle: "Confirm your identity", reason: "Unlock your vault" });
+    const c = await NativeBiometric.getCredentials({ server: SERVER });
     if (!c?.password) return null;
     return { identifier: c.username, password: c.password };
   } catch {
@@ -126,8 +114,8 @@ export async function unlockWithBiometric(): Promise<{ identifier: string; passw
 export async function disableBiometric(): Promise<void> {
   if (!isNative()) return;
   try {
-    await (await plugin()).deleteCredentials({ server: SERVER });
+    await NativeBiometric.deleteCredentials({ server: SERVER });
   } catch {
-    // nothing stored — fine
+    // nothing stored -- fine
   }
 }

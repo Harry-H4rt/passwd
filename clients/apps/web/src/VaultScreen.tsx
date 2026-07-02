@@ -85,6 +85,8 @@ export function VaultScreen(props: {
   const [showData, setShowData] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // "all", "favorites", or "folder:<name>".
+  const [filter, setFilter] = useState("all");
   const [accountOpen, setAccountOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false); // mobile sidebar drawer
   const [loginAlert, setLoginAlert] = useState<string | null>(null);
@@ -192,7 +194,27 @@ export function VaultScreen(props: {
     flash(`Copied ${label}`);
   }
 
-  const filtered = items.filter((i) => !query || searchHaystack(i).includes(query.toLowerCase()));
+  // Distinct folder names in use, for the sidebar and the editor's suggestions.
+  const folders = useMemo(
+    () => [...new Set(items.map((i) => i.folder).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [items],
+  );
+
+  const inFilter = (i: VaultItem) =>
+    filter === "all" ? true : filter === "favorites" ? i.favorite : i.folder === filter.slice("folder:".length);
+  const filtered = items
+    .filter((i) => inFilter(i) && (!query || searchHaystack(i).includes(query.toLowerCase())))
+    .sort((a, b) => Number(b.favorite) - Number(a.favorite));
+
+  // Quick star toggle from the detail pane (no editor round-trip).
+  async function toggleFavorite(item: VaultItem) {
+    try {
+      await saveItem(session, { ...item, favorite: !item.favorite });
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Save failed.");
+    }
+  }
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
   // On mobile the layout is one pane at a time: the item list, or a full-screen
@@ -227,6 +249,27 @@ export function VaultScreen(props: {
           + Add item
         </button>
         <nav className="sidebar-nav">
+          <button className={"nav-item" + (filter === "all" ? " active" : "")} onClick={() => setFilter("all")}>
+            <Icon name="grid" size={16} /> All items
+          </button>
+          <button
+            className={"nav-item" + (filter === "favorites" ? " active" : "")}
+            onClick={() => setFilter("favorites")}
+          >
+            <Icon name="star" size={16} /> Favorites
+          </button>
+          {folders.map((f) => (
+            <button
+              key={f}
+              className={"nav-item" + (filter === "folder:" + f ? " active" : "")}
+              onClick={() => setFilter("folder:" + f)}
+              title={f}
+            >
+              <Icon name="folder" size={16} /> <span className="nav-label">{f}</span>
+            </button>
+          ))}
+        </nav>
+        <nav className="sidebar-nav sidebar-tools">
           <button className="nav-item" onClick={() => setShowData(true)}>
             <Icon name="copy" size={16} /> Import / export
           </button>
@@ -317,7 +360,14 @@ export function VaultScreen(props: {
                   <Icon name={TYPE_META[item.type].icon} size={16} />
                 </span>
                 <div className="item-main">
-                  <div className="item-name">{item.name || "(unnamed)"}</div>
+                  <div className="item-name">
+                    {item.name || "(unnamed)"}
+                    {item.favorite && (
+                      <span className="item-star" title="Favorite">
+                        <Icon name="star" size={12} />
+                      </span>
+                    )}
+                  </div>
                   <div className="item-sub">{itemSubtitle(item)}</div>
                 </div>
               </li>
@@ -357,6 +407,7 @@ export function VaultScreen(props: {
             onEdit={() => setEditing(selected)}
             onDelete={() => handleDelete(selected)}
             onShare={() => setSharing(selected)}
+            onToggleFavorite={() => toggleFavorite(selected)}
             onSaveNotes={(notes) => saveNotes(selected, notes)}
           />
         ) : (
@@ -369,7 +420,9 @@ export function VaultScreen(props: {
         )}
       </section>
 
-      {editing && <ItemEditor item={editing} onCancel={() => setEditing(null)} onSave={handleSave} />}
+      {editing && (
+        <ItemEditor item={editing} folders={folders} onCancel={() => setEditing(null)} onSave={handleSave} />
+      )}
       {show2fa && <TwoFactor session={session} onClose={() => setShow2fa(false)} />}
       {showPasskeys && <Passkeys session={session} onClose={() => setShowPasskeys(false)} />}
       {showRecovery && <RecoveryCode session={session} onClose={() => setShowRecovery(false)} />}
@@ -542,7 +595,7 @@ function itemSubtitle(i: VaultItem): string {
 
 // Fields a search query should match, beyond the name.
 function searchHaystack(i: VaultItem): string {
-  return [i.name, i.username, i.url, i.identity.fullName, i.identity.email, i.card.cardholder]
+  return [i.name, i.username, i.url, i.folder, i.identity.fullName, i.identity.email, i.card.cardholder]
     .join("\n")
     .toLowerCase();
 }
@@ -620,6 +673,7 @@ function ItemDetail(props: {
   onEdit: () => void;
   onDelete: () => void;
   onShare: () => void;
+  onToggleFavorite: () => void;
   onSaveNotes: (notes: string) => void;
 }) {
   const { item } = props;
@@ -635,8 +689,21 @@ function ItemDetail(props: {
         <h2>
           {item.name || "(unnamed)"}
           <span className="type-badge">{TYPE_META[item.type].label}</span>
+          {item.folder && (
+            <span className="type-badge folder-badge">
+              <Icon name="folder" size={11} /> {item.folder}
+            </span>
+          )}
         </h2>
         <div className="detail-actions">
+          <button
+            className={"icon-btn star-btn" + (item.favorite ? " on" : "")}
+            onClick={props.onToggleFavorite}
+            aria-label={item.favorite ? "Remove from favorites" : "Add to favorites"}
+            title={item.favorite ? "Remove from favorites" : "Add to favorites"}
+          >
+            <Icon name="star" size={17} />
+          </button>
           <button className="ghost" onClick={props.onEdit}>
             <Icon name="edit" size={16} /> Edit
           </button>
@@ -887,6 +954,7 @@ function DetailField(props: { label: string; onCopy: () => void; extra?: ReactNo
 
 function ItemEditor(props: {
   item: VaultItem;
+  folders: string[];
   onCancel: () => void;
   onSave: (i: VaultItem) => Promise<boolean>;
 }) {
@@ -1053,6 +1121,31 @@ function ItemEditor(props: {
 
         <label>Notes</label>
         <textarea value={item.notes} onChange={(e) => set("notes", e.target.value)} rows={item.type === "note" ? 6 : 3} />
+
+        <div className="row">
+          <div style={{ flex: 1 }}>
+            <label>Folder</label>
+            <input
+              value={item.folder}
+              onChange={(e) => set("folder", e.target.value)}
+              placeholder="none"
+              list="folder-suggestions"
+            />
+            <datalist id="folder-suggestions">
+              {props.folders.map((f) => (
+                <option key={f} value={f} />
+              ))}
+            </datalist>
+          </div>
+          <label className="fav-check">
+            <input
+              type="checkbox"
+              checked={item.favorite}
+              onChange={(e) => setItem((prev) => ({ ...prev, favorite: e.target.checked }))}
+            />
+            <Icon name="star" size={15} /> Favorite
+          </label>
+        </div>
         <div className="row end">
           <button className="ghost" onClick={props.onCancel}>
             Cancel

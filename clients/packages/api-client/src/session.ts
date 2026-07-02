@@ -82,6 +82,9 @@ export interface VaultItem {
   card: CardDetails;
   identity: IdentityDetails;
   fields: CustomField[];
+  // Organization; both live inside the encrypted payload like everything else.
+  favorite: boolean;
+  folder: string; // free-form folder name; "" = no folder
 }
 
 export type ItemFields = Omit<VaultItem, "id">;
@@ -128,9 +131,11 @@ export function normalizeItemFields(raw: Record<string, unknown>): ItemFields {
           ...(f.hidden ? { hidden: true } : {}),
         }))
     : [];
-  for (const k of ["name", "username", "password", "url", "totp", "notes"] as const) {
+  for (const k of ["name", "username", "password", "url", "totp", "notes", "folder"] as const) {
     out[k] = raw[k] == null ? base[k] : String(raw[k]);
   }
+  // Accept the truthy spellings CSV exports use ("1", "true", "yes").
+  out.favorite = raw.favorite === true || ["1", "true", "yes"].includes(String(raw.favorite).toLowerCase());
   return out;
 }
 
@@ -420,6 +425,8 @@ export function blankFields(type: ItemType = "login"): ItemFields {
     card: blankCard(),
     identity: blankIdentity(),
     fields: [],
+    favorite: false,
+    folder: "",
   };
 }
 

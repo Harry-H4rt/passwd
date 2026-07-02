@@ -12,10 +12,8 @@ import { masterPasswordIssue, normalizeIdentifier } from "@passwd/crypto";
 import {
   biometricAvailable,
   biometricEnrolled,
-  biometricDiagnostic,
   enableBiometric,
   unlockWithBiometric,
-  isAppShell,
 } from "./biometric";
 import { VaultScreen } from "./VaultScreen";
 import { Icon } from "./components/Icon";
@@ -98,20 +96,12 @@ function AuthScreen(props: {
   const [bioEnrolled, setBioEnrolled] = useState(false);
   const [bioRemember, setBioRemember] = useState(false);
   const [bioBusy, setBioBusy] = useState(false);
-  const [bioDiag, setBioDiag] = useState<string>("");
 
   const needTotp = !!twoFactor?.methods.includes("totp");
   const canPasskey = !!twoFactor?.methods.includes("webauthn");
 
   useEffect(() => {
     let cancelled = false;
-    // The diagnostic runs on its own so a hung native call in one path still
-    // leaves the other's output visible.
-    if (isAppShell()) {
-      void biometricDiagnostic((line) => {
-        if (!cancelled) setBioDiag(line);
-      });
-    }
     (async () => {
       const avail = await biometricAvailable();
       const enrolled = avail && (await biometricEnrolled());
@@ -466,7 +456,6 @@ function AuthScreen(props: {
           and your identifier safe.
         </p>
 
-        {bioDiag && <p className="fineprint">biometrics: {bioDiag}</p>}
       </form>
     </div>
   );

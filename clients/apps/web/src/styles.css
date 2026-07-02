@@ -1282,3 +1282,100 @@ button.full {
   height: 1px;
   background: var(--border);
 }
+
+/* Item types */
+.item-ico {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent-600);
+}
+.type-badge {
+  margin-left: 10px;
+  vertical-align: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.type-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+.type-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.type-tab:active {
+  transform: translateY(1px);
+}
+.type-tab.active {
+  color: var(--accent-600);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+/* Per-item TOTP */
+.totp-val {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 20px;
+  letter-spacing: 2px;
+  font-variant-numeric: tabular-nums;
+}
+.totp-timer {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 2px 8px;
+  min-width: 34px;
+  text-align: center;
+}
+.totp-timer.low {
+  color: var(--accent-600);
+  border-color: var(--accent);
+}
+
+/* Custom fields (editor) */
+.cf-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.cf-row input {
+  margin: 0;
+}
+.cf-label {
+  flex: 2;
+  min-width: 0;
+}
+.cf-value {
+  flex: 3;
+  min-width: 0;
+}
+.cf-add {
+  align-self: flex-start;
+  margin-bottom: 4px;
+}

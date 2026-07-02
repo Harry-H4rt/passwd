@@ -35,17 +35,104 @@ export interface SharedItem extends VaultItem {
   shareId: string;
 }
 
+// What kind of thing a vault item is. Stored inside the encrypted payload, so
+// the server never learns the mix of types. Items written before types existed
+// have no `type` key and normalize to "login".
+export type ItemType = "login" | "note" | "card" | "identity";
+
+export const ITEM_TYPES: readonly ItemType[] = ["login", "note", "card", "identity"];
+
+// A user-defined extra field, available on every item type.
+export interface CustomField {
+  label: string;
+  value: string;
+  hidden?: boolean; // render masked, like a password
+}
+
+export interface CardDetails {
+  cardholder: string;
+  number: string;
+  expMonth: string;
+  expYear: string;
+  cvv: string;
+}
+
+export interface IdentityDetails {
+  fullName: string;
+  email: string;
+  phone: string;
+  address: string;
+  company: string;
+}
+
 // Decrypted vault item. `id` is the server cipher id; the rest is encrypted.
+// Only the fields for the item's type are meaningful; the rest stay blank so
+// the whole struct round-trips safely through JSON, exports, and older clients.
 export interface VaultItem {
   id: string;
+  type: ItemType;
   name: string;
+  // login fields
   username: string;
   password: string;
   url: string;
+  // TOTP secret for the site's 2FA (base32 or a full otpauth:// URI); logins only.
+  totp: string;
   notes: string;
+  card: CardDetails;
+  identity: IdentityDetails;
+  fields: CustomField[];
 }
 
 export type ItemFields = Omit<VaultItem, "id">;
+
+export const blankCard = (): CardDetails => ({
+  cardholder: "",
+  number: "",
+  expMonth: "",
+  expYear: "",
+  cvv: "",
+});
+
+export const blankIdentity = (): IdentityDetails => ({
+  fullName: "",
+  email: "",
+  phone: "",
+  address: "",
+  company: "",
+});
+
+// Coerce decrypted / imported JSON of any vintage into a full ItemFields:
+// missing keys get blanks (pre-type items become logins), nested structures are
+// completed key by key, and unknown extra keys are preserved so newer data
+// survives a round-trip through this client.
+export function normalizeItemFields(raw: Record<string, unknown>): ItemFields {
+  const base = blankFields();
+  const out = { ...base, ...raw } as ItemFields;
+  const t = raw.type;
+  out.type = t === "note" || t === "card" || t === "identity" ? t : "login";
+  out.card = {
+    ...base.card,
+    ...(raw.card && typeof raw.card === "object" ? (raw.card as Partial<CardDetails>) : {}),
+  };
+  out.identity = {
+    ...base.identity,
+    ...(raw.identity && typeof raw.identity === "object" ? (raw.identity as Partial<IdentityDetails>) : {}),
+  };
+  out.fields = Array.isArray(raw.fields)
+    ? (raw.fields as unknown[])
+        .filter((f): f is Record<string, unknown> => !!f && typeof f === "object")
+        .map((f) => ({
+          label: f.label == null ? "" : String(f.label),
+          value: f.value == null ? "" : String(f.value),
+          ...(f.hidden ? { hidden: true } : {}),
+        }))
+    : [];
+  for (const k of ["name", "username", "password", "url", "totp", "notes"] as const) {
+    out[k] = raw[k] == null ? base[k] : String(raw[k]);
+  }
+  return out;
+}
 
 export const newAccountId = () => generateAccountId();
 
@@ -228,8 +315,8 @@ export async function listSharedWithMe(s: Session): Promise<SharedItem[]> {
     try {
       const fields = JSON.parse(
         await openShare(s.userKey, s.protectedPrivateKey, { wrappedKey: sh.wrappedKey, data: sh.data }),
-      ) as ItemFields;
-      items.push({ id: sh.id, shareId: sh.id, ...blankFields(), ...fields });
+      ) as Record<string, unknown>;
+      items.push({ id: sh.id, shareId: sh.id, ...normalizeItemFields(fields) });
     } catch {
       // skip shares we can't decrypt
     }
@@ -275,8 +362,8 @@ export async function loadVault(s: Session): Promise<VaultItem[]> {
   const items: VaultItem[] = [];
   for (const c of ciphers) {
     try {
-      const fields = JSON.parse(await decryptItemKeyed(s.userKey, c.data)) as ItemFields;
-      items.push({ id: c.id, ...blankFields(), ...fields });
+      const fields = JSON.parse(await decryptItemKeyed(s.userKey, c.data)) as Record<string, unknown>;
+      items.push({ id: c.id, ...normalizeItemFields(fields) });
     } catch {
       // skip undecryptable items rather than break the whole vault
     }
@@ -321,8 +408,19 @@ export async function importItems(
   return { added, failed };
 }
 
-export function blankFields(): ItemFields {
-  return { name: "", username: "", password: "", url: "", notes: "" };
+export function blankFields(type: ItemType = "login"): ItemFields {
+  return {
+    type,
+    name: "",
+    username: "",
+    password: "",
+    url: "",
+    totp: "",
+    notes: "",
+    card: blankCard(),
+    identity: blankIdentity(),
+    fields: [],
+  };
 }
 
 // A simple strong password generator for the "generate" button.

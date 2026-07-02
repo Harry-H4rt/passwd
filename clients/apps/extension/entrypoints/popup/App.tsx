@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { generatePassword, type ItemFields, type VaultItem } from "@passwd/api-client";
+import { blankFields, generatePassword, type ItemFields, type VaultItem } from "@passwd/api-client";
+import { totpFromString } from "@passwd/crypto";
 import {
   type ItemView,
   type StateResponse,
@@ -80,6 +81,23 @@ function safeHost(url: string): string {
     return new URL(url.includes("://") ? url : `https://${url}`).hostname.replace(/^www\./, "");
   } catch {
     return "";
+  }
+}
+
+// List-row subtitle per item type (the popup shows all vault items, but only
+// logins are fillable).
+function itemSub(i: ItemView): string {
+  switch (i.type) {
+    case "note":
+      return i.notes.split("\n")[0]?.slice(0, 50) || "secure note";
+    case "card": {
+      const digits = i.card.number.replace(/\D/g, "");
+      return digits ? "•••• " + digits.slice(-4) : "card";
+    }
+    case "identity":
+      return i.identity.email || i.identity.fullName || "identity";
+    default:
+      return i.username || i.url;
   }
 }
 
@@ -224,6 +242,14 @@ function Vault(props: { onLock: () => void }) {
     flash(`Copied ${label}`);
   }
 
+  // Generate the current TOTP code from the item's stored 2FA secret and copy it.
+  async function copyTotp(item: ItemView) {
+    const r = await totpFromString(item.totp);
+    if (!r) return flash("Invalid 2FA secret");
+    await navigator.clipboard.writeText(r.code);
+    flash(`Copied 2FA code (${r.secondsLeft}s left)`);
+  }
+
   async function fill(item: ItemView) {
     const tabs = await browser.tabs.query({ active: true, currentWindow: true });
     const tabId = tabs[0]?.id;
@@ -245,7 +271,7 @@ function Vault(props: { onLock: () => void }) {
 
   function startAdd() {
     setFromPending(false);
-    setEditing({ id: "", name: "", username: "", password: "", url: "", notes: "" });
+    setEditing({ id: "", ...blankFields() });
   }
 
   function reviewPending() {
@@ -254,11 +280,11 @@ function Vault(props: { onLock: () => void }) {
     setFromPending(true);
     setEditing({
       id: "",
+      ...blankFields(),
       name: host || "New login",
       username: pending.username,
       password: pending.password,
       url: pending.url,
-      notes: "",
     });
   }
 
@@ -371,25 +397,31 @@ function Vault(props: { onLock: () => void }) {
           ) : (
             <ul>
               {filtered.map((item) => {
-                const match = tabHost && hostMatches(item.url, tabHost);
+                const match = item.type === "login" && tabHost && hostMatches(item.url, tabHost);
                 return (
                   <li key={item.id} className={match ? "match" : ""}>
                     <Avatar item={item} />
                     <div className="info">
                       <div className="name">
                         {item.name || "(unnamed)"} {match && <span className="badge">this site</span>}
+                        {item.type !== "login" && <span className="badge">{item.type}</span>}
                       </div>
-                      <div className="sub">{item.username || item.url}</div>
+                      <div className="sub">{itemSub(item)}</div>
                     </div>
                     <div className="actions">
-                      {item.password && (
+                      {item.type === "login" && item.password && (
                         <button className="ghost" onClick={() => fill(item)} title="Fill this page">
                           Fill
                         </button>
                       )}
-                      {item.password && (
+                      {item.type === "login" && item.password && (
                         <button className="ghost" onClick={() => copy("password", item.password)} title="Copy password">
                           Copy
+                        </button>
+                      )}
+                      {item.type === "login" && item.totp && (
+                        <button className="ghost" onClick={() => copyTotp(item)} title="Copy the current 2FA code">
+                          2FA
                         </button>
                       )}
                       <button className="ghost" onClick={() => setEditing(item)} title="Edit">
@@ -442,30 +474,48 @@ function Editor(props: {
     setBusy(false);
   }
 
+  // The popup's form is login-shaped; other types edit name/notes here and
+  // their structured fields in the web vault. The full item is round-tripped,
+  // so nothing is lost either way.
+  const isLogin = item.type === "login";
+
   return (
     <Shell>
       <div className="editor">
         <h1 className="title left">{isNew ? "Add item" : "Edit item"}</h1>
         <label>Name</label>
         <input value={item.name} onChange={(e) => set("name", e.target.value)} placeholder="GitHub" autoFocus />
-        <label>URL</label>
-        <input value={item.url} onChange={(e) => set("url", e.target.value)} placeholder="https://github.com" />
-        <label>Username</label>
-        <input value={item.username} onChange={(e) => set("username", e.target.value)} placeholder="you@example.com" />
-        <label>Password</label>
-        <div className="pwrow">
-          <input
-            type={showPw ? "text" : "password"}
-            value={item.password}
-            onChange={(e) => set("password", e.target.value)}
-          />
-          <button type="button" className="reveal" onClick={() => setShowPw((s) => !s)}>
-            {showPw ? "Hide" : "Show"}
-          </button>
-        </div>
-        <button type="button" className="ghost full" onClick={() => set("password", generatePassword())}>
-          Generate password
-        </button>
+        {isLogin && (
+          <>
+            <label>URL</label>
+            <input value={item.url} onChange={(e) => set("url", e.target.value)} placeholder="https://github.com" />
+            <label>Username</label>
+            <input value={item.username} onChange={(e) => set("username", e.target.value)} placeholder="you@example.com" />
+            <label>Password</label>
+            <div className="pwrow">
+              <input
+                type={showPw ? "text" : "password"}
+                value={item.password}
+                onChange={(e) => set("password", e.target.value)}
+              />
+              <button type="button" className="reveal" onClick={() => setShowPw((s) => !s)}>
+                {showPw ? "Hide" : "Show"}
+              </button>
+            </div>
+            <button type="button" className="ghost full" onClick={() => set("password", generatePassword())}>
+              Generate password
+            </button>
+            <label>2FA secret (TOTP)</label>
+            <input
+              value={item.totp}
+              onChange={(e) => set("totp", e.target.value)}
+              placeholder="base32 secret or otpauth:// URI"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </>
+        )}
+        {!isLogin && <p className="muted">This is a {item.type}; edit its details in the web vault.</p>}
         <label>Notes</label>
         <textarea value={item.notes} onChange={(e) => set("notes", e.target.value)} rows={2} />
 

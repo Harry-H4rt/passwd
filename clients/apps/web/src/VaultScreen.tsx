@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   type Session,
   type VaultItem,
+  type ItemType,
+  type CustomField,
+  ITEM_TYPES,
   blankFields,
   loadVault,
   addItem,
@@ -30,7 +33,7 @@ import {
   type SharedItem,
   type WebAuthnCredentialSummary,
 } from "@passwd/api-client";
-import { normalizeIdentifier } from "@passwd/crypto";
+import { normalizeIdentifier, totpFromString } from "@passwd/crypto";
 import { passwordWeakness, reusedItemIds, breachedItemIds } from "./health";
 import { biometricEnrolled, disableBiometric } from "./biometric";
 import { Icon } from "./components/Icon";
@@ -189,13 +192,7 @@ export function VaultScreen(props: {
     flash(`Copied ${label}`);
   }
 
-  const filtered = items.filter(
-    (i) =>
-      !query ||
-      i.name.toLowerCase().includes(query.toLowerCase()) ||
-      i.username.toLowerCase().includes(query.toLowerCase()) ||
-      i.url.toLowerCase().includes(query.toLowerCase()),
-  );
+  const filtered = items.filter((i) => !query || searchHaystack(i).includes(query.toLowerCase()));
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
   // On mobile the layout is one pane at a time: the item list, or a full-screen
@@ -316,9 +313,12 @@ export function VaultScreen(props: {
                   setSelectedId(item.id);
                 }}
               >
+                <span className="item-ico" title={TYPE_META[item.type].label}>
+                  <Icon name={TYPE_META[item.type].icon} size={16} />
+                </span>
                 <div className="item-main">
                   <div className="item-name">{item.name || "(unnamed)"}</div>
-                  <div className="item-sub">{item.username || item.url || "no details"}</div>
+                  <div className="item-sub">{itemSubtitle(item)}</div>
                 </div>
               </li>
             ))}
@@ -517,6 +517,36 @@ function stripId(item: VaultItem) {
   return fields;
 }
 
+// Per-type presentation: label, list icon, and the list row's subtitle.
+const TYPE_META: Record<ItemType, { label: string; icon: string }> = {
+  login: { label: "Login", icon: "key" },
+  note: { label: "Note", icon: "note" },
+  card: { label: "Card", icon: "card" },
+  identity: { label: "Identity", icon: "user" },
+};
+
+function itemSubtitle(i: VaultItem): string {
+  switch (i.type) {
+    case "note":
+      return i.notes.split("\n")[0]?.slice(0, 80) || "secure note";
+    case "card": {
+      const digits = i.card.number.replace(/\D/g, "");
+      return digits ? "•••• " + digits.slice(-4) : "card";
+    }
+    case "identity":
+      return i.identity.email || i.identity.fullName || "identity";
+    default:
+      return i.username || i.url || "no details";
+  }
+}
+
+// Fields a search query should match, beyond the name.
+function searchHaystack(i: VaultItem): string {
+  return [i.name, i.username, i.url, i.identity.fullName, i.identity.email, i.card.cardholder]
+    .join("\n")
+    .toLowerCase();
+}
+
 function errMsg(e: unknown): string {
   return e instanceof Error ? e.message : "Something went wrong.";
 }
@@ -525,7 +555,65 @@ function normalizeUrl(url: string): string {
   return /^https?:\/\//i.test(url) ? url : `https://${url}`;
 }
 
-// Read-only detail view for the selected item. Password is masked until revealed.
+// Live TOTP code for a login item's stored 2FA secret, regenerated every second
+// on-device. Shows the remaining validity so users don't paste a dying code.
+function TotpCode(props: { secret: string; onCopy: (label: string, value: string) => void }) {
+  const [state, setState] = useState<{ code: string; secondsLeft: number } | "invalid" | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const tick = async () => {
+      const r = await totpFromString(props.secret);
+      if (alive) setState(r ?? "invalid");
+    };
+    void tick();
+    const t = setInterval(tick, 1000);
+    return () => {
+      alive = false;
+      clearInterval(t);
+    };
+  }, [props.secret]);
+
+  if (state === "invalid") {
+    return (
+      <div className="detail-field">
+        <label>2FA code</label>
+        <p className="muted">The stored 2FA secret is not a valid TOTP secret.</p>
+      </div>
+    );
+  }
+  if (!state) return null;
+  return (
+    <DetailField
+      label="2FA code"
+      onCopy={() => props.onCopy("2FA code", state.code)}
+      extra={<span className={"totp-timer" + (state.secondsLeft <= 5 ? " low" : "")}>{state.secondsLeft}s</span>}
+    >
+      <span className="val totp-val">{state.code.replace(/^(\d{3})(\d{3})$/, "$1 $2")}</span>
+    </DetailField>
+  );
+}
+
+// A value that renders masked until revealed (passwords, CVVs, hidden fields).
+function SecretValue(props: { value: string }) {
+  const [reveal, setReveal] = useState(false);
+  return (
+    <>
+      <span className="val pw-val">{reveal ? props.value : "•".repeat(Math.min(props.value.length, 16))}</span>
+      <button
+        className="icon-btn"
+        onClick={() => setReveal((r) => !r)}
+        aria-label={reveal ? "Hide" : "Reveal"}
+        title={reveal ? "Hide" : "Reveal"}
+      >
+        <Icon name={reveal ? "eyeOff" : "eye"} size={16} />
+      </button>
+    </>
+  );
+}
+
+// Read-only detail view for the selected item; fields depend on its type.
+// Secrets are masked until revealed.
 function ItemDetail(props: {
   item: VaultItem;
   onCopy: (label: string, value: string) => void;
@@ -535,13 +623,19 @@ function ItemDetail(props: {
   onSaveNotes: (notes: string) => void;
 }) {
   const { item } = props;
-  const [reveal, setReveal] = useState(false);
   const [notes, setNotes] = useState(item.notes);
+  const copy = props.onCopy;
+
+  const loginEmpty = !item.url && !item.username && !item.password && !item.totp;
+  const cardExpiry = [item.card.expMonth, item.card.expYear].filter(Boolean).join(" / ");
 
   return (
     <div className="detail">
       <div className="detail-head">
-        <h2>{item.name || "(unnamed)"}</h2>
+        <h2>
+          {item.name || "(unnamed)"}
+          <span className="type-badge">{TYPE_META[item.type].label}</span>
+        </h2>
         <div className="detail-actions">
           <button className="ghost" onClick={props.onEdit}>
             <Icon name="edit" size={16} /> Edit
@@ -557,41 +651,96 @@ function ItemDetail(props: {
 
       <div className="detail-body">
         <div className="detail-fields">
-          {item.url && (
-            <DetailField label="Website" onCopy={() => props.onCopy("website", item.url)}>
-              <a className="val" href={normalizeUrl(item.url)} target="_blank" rel="noreferrer">
-                {item.url}
-              </a>
+          {item.type === "login" && (
+            <>
+              {item.url && (
+                <DetailField label="Website" onCopy={() => copy("website", item.url)}>
+                  <a className="val" href={normalizeUrl(item.url)} target="_blank" rel="noreferrer">
+                    {item.url}
+                  </a>
+                </DetailField>
+              )}
+              {item.username && (
+                <DetailField label="Username" onCopy={() => copy("username", item.username)}>
+                  <span className="val">{item.username}</span>
+                </DetailField>
+              )}
+              {item.password && (
+                <DetailField label="Password" onCopy={() => copy("password", item.password)}>
+                  <SecretValue value={item.password} />
+                </DetailField>
+              )}
+              {item.totp && <TotpCode secret={item.totp} onCopy={copy} />}
+              {loginEmpty && <p className="muted">No login fields. Use Edit to add some.</p>}
+            </>
+          )}
+
+          {item.type === "card" && (
+            <>
+              {item.card.cardholder && (
+                <DetailField label="Cardholder" onCopy={() => copy("cardholder", item.card.cardholder)}>
+                  <span className="val">{item.card.cardholder}</span>
+                </DetailField>
+              )}
+              {item.card.number && (
+                <DetailField label="Card number" onCopy={() => copy("card number", item.card.number)}>
+                  <SecretValue value={item.card.number} />
+                </DetailField>
+              )}
+              {cardExpiry && (
+                <DetailField label="Expires" onCopy={() => copy("expiry", cardExpiry)}>
+                  <span className="val">{cardExpiry}</span>
+                </DetailField>
+              )}
+              {item.card.cvv && (
+                <DetailField label="CVV" onCopy={() => copy("CVV", item.card.cvv)}>
+                  <SecretValue value={item.card.cvv} />
+                </DetailField>
+              )}
+              {!item.card.cardholder && !item.card.number && (
+                <p className="muted">No card details yet. Use Edit to add them.</p>
+              )}
+            </>
+          )}
+
+          {item.type === "identity" && (
+            <>
+              {item.identity.fullName && (
+                <DetailField label="Full name" onCopy={() => copy("full name", item.identity.fullName)}>
+                  <span className="val">{item.identity.fullName}</span>
+                </DetailField>
+              )}
+              {item.identity.email && (
+                <DetailField label="Email" onCopy={() => copy("email", item.identity.email)}>
+                  <span className="val">{item.identity.email}</span>
+                </DetailField>
+              )}
+              {item.identity.phone && (
+                <DetailField label="Phone" onCopy={() => copy("phone", item.identity.phone)}>
+                  <span className="val">{item.identity.phone}</span>
+                </DetailField>
+              )}
+              {item.identity.address && (
+                <DetailField label="Address" onCopy={() => copy("address", item.identity.address)}>
+                  <span className="val val-wrap">{item.identity.address}</span>
+                </DetailField>
+              )}
+              {item.identity.company && (
+                <DetailField label="Company" onCopy={() => copy("company", item.identity.company)}>
+                  <span className="val">{item.identity.company}</span>
+                </DetailField>
+              )}
+              {!item.identity.fullName && !item.identity.email && (
+                <p className="muted">No identity details yet. Use Edit to add them.</p>
+              )}
+            </>
+          )}
+
+          {item.fields.map((f, i) => (
+            <DetailField key={i} label={f.label || "Field"} onCopy={() => copy(f.label || "field", f.value)}>
+              {f.hidden ? <SecretValue value={f.value} /> : <span className="val val-wrap">{f.value}</span>}
             </DetailField>
-          )}
-          {item.username && (
-            <DetailField label="Username" onCopy={() => props.onCopy("username", item.username)}>
-              <span className="val">{item.username}</span>
-            </DetailField>
-          )}
-          {item.password && (
-            <DetailField
-              label="Password"
-              onCopy={() => props.onCopy("password", item.password)}
-              extra={
-                <button
-                  className="icon-btn"
-                  onClick={() => setReveal((r) => !r)}
-                  aria-label={reveal ? "Hide password" : "Reveal password"}
-                  title={reveal ? "Hide password" : "Reveal password"}
-                >
-                  <Icon name={reveal ? "eyeOff" : "eye"} size={16} />
-                </button>
-              }
-            >
-              <span className="val pw-val">
-                {reveal ? item.password : "•".repeat(Math.min(item.password.length, 16))}
-              </span>
-            </DetailField>
-          )}
-          {!item.url && !item.username && !item.password && (
-            <p className="muted">No login fields. Use Edit to add some.</p>
-          )}
+          ))}
         </div>
 
         <div className="detail-notes">
@@ -743,28 +892,167 @@ function ItemEditor(props: {
 }) {
   const [item, setItem] = useState<VaultItem>(props.item);
   const set = (k: keyof VaultItem, v: string) => setItem((prev) => ({ ...prev, [k]: v }));
+  const setCard = (k: keyof VaultItem["card"], v: string) =>
+    setItem((prev) => ({ ...prev, card: { ...prev.card, [k]: v } }));
+  const setIdentity = (k: keyof VaultItem["identity"], v: string) =>
+    setItem((prev) => ({ ...prev, identity: { ...prev.identity, [k]: v } }));
+  const setField = (i: number, patch: Partial<CustomField>) =>
+    setItem((prev) => ({
+      ...prev,
+      fields: prev.fields.map((f, j) => (j === i ? { ...f, ...patch } : f)),
+    }));
+
+  const namePlaceholder = { login: "GitHub", note: "Wifi password", card: "Personal Visa", identity: "Me" }[
+    item.type
+  ];
 
   return (
     <div className="modal-backdrop" onClick={props.onCancel}>
       <div className="card modal" onClick={(e) => e.stopPropagation()}>
         <h2>{item.id ? "Edit item" : "Add item"}</h2>
-        <label>Name</label>
-        <input value={item.name} onChange={(e) => set("name", e.target.value)} placeholder="GitHub" autoFocus />
-        <label>URL</label>
-        <input value={item.url} onChange={(e) => set("url", e.target.value)} placeholder="https://github.com" />
-        <label>Username</label>
-        <input value={item.username} onChange={(e) => set("username", e.target.value)} placeholder="you@example.com" />
-        <label>Password</label>
-        <div className="row">
-          <div style={{ flex: 1 }}>
-            <PasswordField value={item.password} onChange={(v) => set("password", v)} />
+
+        {/* The type is chosen at creation; changing it later would orphan the
+            other type's fields, so existing items keep theirs. */}
+        {!item.id && (
+          <div className="type-tabs" role="tablist">
+            {ITEM_TYPES.map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                aria-selected={item.type === t}
+                className={"type-tab" + (item.type === t ? " active" : "")}
+                onClick={() => setItem((prev) => ({ ...prev, type: t }))}
+              >
+                <Icon name={TYPE_META[t].icon} size={15} /> {TYPE_META[t].label}
+              </button>
+            ))}
           </div>
-          <button type="button" className="ghost" onClick={() => set("password", generatePassword())}>
-            Generate
-          </button>
-        </div>
+        )}
+
+        <label>Name</label>
+        <input value={item.name} onChange={(e) => set("name", e.target.value)} placeholder={namePlaceholder} autoFocus />
+
+        {item.type === "login" && (
+          <>
+            <label>URL</label>
+            <input value={item.url} onChange={(e) => set("url", e.target.value)} placeholder="https://github.com" />
+            <label>Username</label>
+            <input
+              value={item.username}
+              onChange={(e) => set("username", e.target.value)}
+              placeholder="you@example.com"
+            />
+            <label>Password</label>
+            <div className="row">
+              <div style={{ flex: 1 }}>
+                <PasswordField value={item.password} onChange={(v) => set("password", v)} />
+              </div>
+              <button type="button" className="ghost" onClick={() => set("password", generatePassword())}>
+                Generate
+              </button>
+            </div>
+            <label>2FA secret (TOTP)</label>
+            <input
+              value={item.totp}
+              onChange={(e) => set("totp", e.target.value)}
+              placeholder="base32 secret or otpauth:// URI from the site's 2FA setup"
+              autoComplete="off"
+              spellCheck={false}
+            />
+          </>
+        )}
+
+        {item.type === "card" && (
+          <>
+            <label>Cardholder</label>
+            <input value={item.card.cardholder} onChange={(e) => setCard("cardholder", e.target.value)} placeholder="Name on the card" />
+            <label>Card number</label>
+            <input
+              value={item.card.number}
+              onChange={(e) => setCard("number", e.target.value)}
+              placeholder="4111 1111 1111 1111"
+              inputMode="numeric"
+              autoComplete="off"
+            />
+            <div className="row">
+              <div style={{ flex: 1 }}>
+                <label>Expiry month</label>
+                <input value={item.card.expMonth} onChange={(e) => setCard("expMonth", e.target.value)} placeholder="MM" inputMode="numeric" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label>Expiry year</label>
+                <input value={item.card.expYear} onChange={(e) => setCard("expYear", e.target.value)} placeholder="YYYY" inputMode="numeric" />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label>CVV</label>
+                <input value={item.card.cvv} onChange={(e) => setCard("cvv", e.target.value)} placeholder="123" inputMode="numeric" autoComplete="off" />
+              </div>
+            </div>
+          </>
+        )}
+
+        {item.type === "identity" && (
+          <>
+            <label>Full name</label>
+            <input value={item.identity.fullName} onChange={(e) => setIdentity("fullName", e.target.value)} />
+            <label>Email</label>
+            <input value={item.identity.email} onChange={(e) => setIdentity("email", e.target.value)} />
+            <label>Phone</label>
+            <input value={item.identity.phone} onChange={(e) => setIdentity("phone", e.target.value)} />
+            <label>Address</label>
+            <textarea value={item.identity.address} onChange={(e) => setIdentity("address", e.target.value)} rows={2} />
+            <label>Company</label>
+            <input value={item.identity.company} onChange={(e) => setIdentity("company", e.target.value)} />
+          </>
+        )}
+
+        {item.fields.length > 0 && <label>Custom fields</label>}
+        {item.fields.map((f, i) => (
+          <div className="cf-row" key={i}>
+            <input
+              value={f.label}
+              onChange={(e) => setField(i, { label: e.target.value })}
+              placeholder="Label"
+              className="cf-label"
+            />
+            <input
+              value={f.value}
+              onChange={(e) => setField(i, { value: e.target.value })}
+              placeholder="Value"
+              className="cf-value"
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              className="icon-btn"
+              title={f.hidden ? "Shown masked in details" : "Shown in the clear; click to mask"}
+              aria-label={f.hidden ? "Unmask this field" : "Mask this field"}
+              onClick={() => setField(i, { hidden: !f.hidden })}
+            >
+              <Icon name={f.hidden ? "eyeOff" : "eye"} size={16} />
+            </button>
+            <button
+              type="button"
+              className="icon-btn"
+              title="Remove field"
+              aria-label="Remove field"
+              onClick={() => setItem((prev) => ({ ...prev, fields: prev.fields.filter((_, j) => j !== i) }))}
+            >
+              <Icon name="trash" size={16} />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          className="ghost cf-add"
+          onClick={() => setItem((prev) => ({ ...prev, fields: [...prev.fields, { label: "", value: "" }] }))}
+        >
+          + Add custom field
+        </button>
+
         <label>Notes</label>
-        <textarea value={item.notes} onChange={(e) => set("notes", e.target.value)} rows={3} />
+        <textarea value={item.notes} onChange={(e) => set("notes", e.target.value)} rows={item.type === "note" ? 6 : 3} />
         <div className="row end">
           <button className="ghost" onClick={props.onCancel}>
             Cancel
@@ -1145,7 +1433,7 @@ function SharedWithMe(props: {
               <li key={it.shareId} className="shared-row">
                 <div className="shared-main">
                   <div className="item-name">{it.name || "(unnamed)"}</div>
-                  <div className="item-sub">{it.username || it.url || "no details"}</div>
+                  <div className="item-sub">{itemSubtitle(it)}</div>
                 </div>
                 <div className="shared-actions">
                   {it.username && (

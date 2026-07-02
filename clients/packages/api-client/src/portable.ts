@@ -2,22 +2,21 @@
 // they are easy to test. The web app pairs these with encryptBackup/decryptBackup
 // from @passwd/crypto for the encrypted-backup path.
 
-import type { ItemFields } from "./session.js";
+import { normalizeItemFields, type ItemFields } from "./session.js";
 
-const FIELDS = ["name", "url", "username", "password", "notes"] as const;
+// Flat columns for CSV (logins only carry these; cards/identities need JSON).
+const FIELDS = ["name", "url", "username", "password", "totp", "notes"] as const;
 type Field = (typeof FIELDS)[number];
 
 export const EXPORT_FORMAT = "passwd-export";
-export const EXPORT_VERSION = 1;
+// v1 had only flat login fields; v2 adds type/totp/card/identity/fields. Both
+// import fine: normalizeItemFields blanks whatever a file doesn't carry.
+export const EXPORT_VERSION = 2;
 
 interface PlaintextExport {
   format: typeof EXPORT_FORMAT;
   version: number;
   items: ItemFields[];
-}
-
-function blank(): ItemFields {
-  return { name: "", username: "", password: "", url: "", notes: "" };
 }
 
 // --- Export -----------------------------------------------------------------
@@ -26,7 +25,7 @@ export function toPlaintextJSON(items: ItemFields[]): string {
   const payload: PlaintextExport = {
     format: EXPORT_FORMAT,
     version: EXPORT_VERSION,
-    items: items.map((i) => ({ ...blank(), ...pick(i) })),
+    items: items.map((i) => normalizeItemFields(i as unknown as Record<string, unknown>)),
   };
   return JSON.stringify(payload, null, 2);
 }
@@ -35,10 +34,6 @@ export function toCSV(items: ItemFields[]): string {
   const rows = [FIELDS.join(",")];
   for (const it of items) rows.push(FIELDS.map((f) => csvEscape(it[f] ?? "")).join(","));
   return rows.join("\r\n");
-}
-
-function pick(i: ItemFields): ItemFields {
-  return { name: i.name, url: i.url, username: i.username, password: i.password, notes: i.notes };
 }
 
 function csvEscape(v: string): string {
@@ -113,21 +108,41 @@ const ALIASES: Record<string, Field> = {
   note: "notes",
   comment: "notes",
   comments: "notes",
+  totp: "totp",
+  otp: "totp",
+  login_totp: "totp",
 };
 
 function normalize(row: Record<string, unknown>): ItemFields {
-  const out = blank();
+  // Map foreign column names onto our flat fields and carry the structured
+  // keys from passwd's own JSON exports; anything else (folders, colors, ...)
+  // is dropped rather than smuggled into the vault.
+  const flat: Record<string, unknown> = {};
+  for (const k of ["type", "card", "identity", "fields"] as const) {
+    if (row[k] !== undefined) flat[k] = row[k];
+  }
   for (const [key, value] of Object.entries(row)) {
     const field = (FIELDS as readonly string[]).includes(key)
       ? (key as Field)
       : ALIASES[key.trim().toLowerCase()];
-    if (field && out[field] === "") out[field] = value == null ? "" : String(value);
+    if (field && !flat[field]) flat[field] = value == null ? "" : String(value);
   }
-  return out;
+  return normalizeItemFields(flat);
 }
 
 function nonEmpty(i: ItemFields): boolean {
-  return Boolean(i.name || i.username || i.password || i.url || i.notes);
+  return Boolean(
+    i.name ||
+      i.username ||
+      i.password ||
+      i.url ||
+      i.notes ||
+      i.totp ||
+      i.card.number ||
+      i.identity.fullName ||
+      i.identity.email ||
+      i.fields.length,
+  );
 }
 
 // Minimal RFC 4180 parser: handles quoted fields with embedded commas, quotes

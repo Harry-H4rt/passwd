@@ -15,7 +15,7 @@ import {
   biometricDiagnostic,
   enableBiometric,
   unlockWithBiometric,
-  isNative,
+  isAppShell,
 } from "./biometric";
 import { VaultScreen } from "./VaultScreen";
 import { Icon } from "./components/Icon";
@@ -105,14 +105,19 @@ function AuthScreen(props: {
 
   useEffect(() => {
     let cancelled = false;
+    // The diagnostic runs on its own so a hung native call in one path still
+    // leaves the other's output visible.
+    if (isAppShell()) {
+      void biometricDiagnostic((line) => {
+        if (!cancelled) setBioDiag(line);
+      });
+    }
     (async () => {
       const avail = await biometricAvailable();
       const enrolled = avail && (await biometricEnrolled());
-      const diag = await biometricDiagnostic();
       if (!cancelled) {
         setBioAvailable(avail);
         setBioEnrolled(enrolled);
-        setBioDiag(diag);
       }
     })();
     return () => {
@@ -461,7 +466,7 @@ function AuthScreen(props: {
           and your identifier safe.
         </p>
 
-        {isNative() && bioDiag && <p className="fineprint">biometrics: {bioDiag}</p>}
+        {bioDiag && <p className="fineprint">biometrics: {bioDiag}</p>}
       </form>
     </div>
   );

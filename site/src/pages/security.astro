@@ -1,5 +1,6 @@
 ---
 import Base from "../layouts/Base.astro";
+import Icon from "../components/Icon.astro";
 
 const steps = [
   ["You set a master password", "It never leaves your device. It isn't sent to the server at all, not even hashed-for-login in its raw form."],
@@ -7,66 +8,102 @@ const steps = [
   ["Your vault is encrypted locally", "Every item is sealed with AES-256-GCM using a key only your device can compute."],
   ["Only ciphertext is synced", "The server receives and stores encrypted blobs. It has nothing it could decrypt."],
 ];
+
+const canDo = [
+  "Store and return encrypted blobs",
+  "Verify your login without seeing your password",
+  "Enforce two-factor, rate limits, and lockout",
+  "Hold a blinded login hash",
+];
+const cantDo = [
+  "Decrypt any vault item",
+  "Learn your master password",
+  "Recover a forgotten master password",
+  "Read your email, identity, or item names",
+];
 ---
 
 <Base title="Security | passwd" active="security">
-  <section class="hero" style="padding-bottom:40px;">
+  <section class="page-head">
     <div class="container">
       <span class="eyebrow">How it works</span>
       <h1>Zero-knowledge, explained plainly.</h1>
-      <p class="lead" style="margin-inline:auto;">
-        “Zero-knowledge” means the service literally cannot read your data. Here's how that
+      <p class="lead">
+        "Zero-knowledge" means the service literally cannot read your data. Here's how that
         works, and what it means for you.
       </p>
     </div>
   </section>
 
+  <section class="block" style="padding-bottom:0;">
+    <div class="container">
+      <div class="section-head" style="margin-bottom:28px;">
+        <h2>The four steps</h2>
+      </div>
+      <div class="steps">
+        {steps.map(([t, b]) => (
+          <div class="step">
+            <h3>{t}</h3>
+            <p>{b}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="block" style="padding-bottom:0;">
+    <div class="container">
+      <div class="section-head" style="margin-bottom:28px;">
+        <h2>What the server can and cannot do</h2>
+      </div>
+      <div class="duo">
+        <div class="panel can">
+          <h3><Icon name="check" size={18} />The server can</h3>
+          <ul>{canDo.map((t) => <li>{t}</li>)}</ul>
+        </div>
+        <div class="panel cant">
+          <h3><Icon name="x" size={18} />The server can never</h3>
+          <ul>{cantDo.map((t) => <li>{t}</li>)}</ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="block">
     <div class="container prose">
-      <h2>The four steps</h2>
-      <ol>
-        {steps.map(([t, b]) => (
-          <li style="margin:0.8em 0;"><strong>{t}.</strong> <span class="muted">{b}</span></li>
-        ))}
-      </ol>
-
-      <h2>What the server can and cannot do</h2>
-      <table class="table">
-        <thead><tr><th>Can</th><th>Cannot</th></tr></thead>
-        <tbody>
-          <tr><td><span class="can">Yes</span> Store &amp; return encrypted blobs</td><td><span class="cant">No</span> Decrypt any vault item</td></tr>
-          <tr><td><span class="can">Yes</span> Verify your login</td><td><span class="cant">No</span> Learn your master password</td></tr>
-          <tr><td><span class="can">Yes</span> Enforce 2FA, rate limits, lockout</td><td><span class="cant">No</span> Recover a forgotten master password</td></tr>
-          <tr><td><span class="can">Yes</span> Hold a blinded login hash</td><td><span class="cant">No</span> Read your email/identity or item names</td></tr>
-        </tbody>
-      </table>
-
       <div class="callout">
-        <strong>The honest trade-off:</strong> because no one but you can decrypt your vault,
-        there is <strong>no password reset</strong>. If you lose your master password (and your
-        recovery passphrase), the vault is unrecoverable. That irreversibility <em>is</em> the
-        privacy guarantee.
+        <Icon name="info" size={19} />
+        <p>
+          <strong>The honest trade-off:</strong> because no one but you can decrypt your vault,
+          there is <strong>no password reset</strong>. If you lose your master password (and your
+          recovery code), the vault is unrecoverable. That irreversibility <em>is</em> the
+          privacy guarantee.
+        </p>
       </div>
 
       <h2>The building blocks</h2>
       <ul>
-        <li><strong>Argon2id</strong>: memory-hard key derivation, resistant to brute force.</li>
-        <li><strong>AES-256-GCM</strong>: authenticated encryption for every vault item.</li>
-        <li><strong>HKDF</strong>: key separation so the login credential and the encryption key are never the same value.</li>
-        <li><strong>Blinded identifiers</strong>: your login handle is stored only as a keyed hash.</li>
+        <li><span class="term">Argon2id</span> memory-hard key derivation, resistant to brute force.</li>
+        <li><span class="term">AES-256-GCM</span> authenticated encryption for every vault item.</li>
+        <li><span class="term">HKDF</span> key separation so the login credential and the encryption key are never the same value.</li>
+        <li><span class="term">Blinded identifiers</span> your login handle is stored only as a keyed hash.</li>
       </ul>
 
       <h2>What's in scope</h2>
       <p class="muted">
         The design defends against a fully compromised server, a stolen database, network
-        interception, and a malicious operator. A compromised device (e.g. malware/keylogger on
-        your own computer) is, like every password manager, outside what encryption alone can fix.
+        interception, and a malicious operator. A compromised device (e.g. malware or a keylogger
+        on your own computer) is, like every password manager, outside what encryption alone can
+        fix.
       </p>
 
       <div class="callout">
-        <strong>Status:</strong> passwd is pre-1.0 and has not yet had an independent security
-        audit. The cryptographic design is public and documented, so review it, and please don't
-        store irreplaceable secrets until the audit milestone is reached.
+        <Icon name="info" size={19} />
+        <p>
+          <strong>Status:</strong> passwd is pre-1.0 and has not yet had an independent security
+          audit. The cryptographic design is public and documented, so review it, and please don't
+          store irreplaceable secrets until the audit milestone is reached.
+        </p>
       </div>
     </div>
   </section>

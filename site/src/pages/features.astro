@@ -1,58 +1,68 @@
 ---
 import Base from "../layouts/Base.astro";
+import Icon from "../components/Icon.astro";
 import { VAULT_URL } from "../config";
 
 const groups = [
   {
     title: "Privacy by design",
+    blurb: "The service is built so it can't learn anything about you, even if it wanted to.",
     items: [
-      ["Zero-knowledge encryption", "Vault items are encrypted with AES-256-GCM on your device. The server stores only opaque ciphertext."],
-      ["Passphrase accounts", "Sign up with a generated 12-word passphrase. No email, no phone number, no personal data."],
-      ["Blinded identity", "Even your login handle is stored only as a salted hash, so the server can't enumerate or identify its users."],
-      ["No tracking", "No analytics, no third-party scripts, no telemetry. Nothing to leak."],
+      ["shield", "Zero-knowledge encryption", "Vault items are encrypted with AES-256-GCM on your device. The server stores only opaque ciphertext."],
+      ["key", "Passphrase accounts", "Sign up with a generated 12-word passphrase. No email, no phone number, no personal data."],
+      ["eyeOff", "Blinded identity", "Even your login handle is stored only as a salted hash, so the server can't enumerate or identify its users."],
+      ["x", "No tracking", "No analytics, no third-party scripts, no telemetry. Nothing to leak."],
     ],
   },
   {
     title: "Security",
+    blurb: "Modern, boring, well-studied cryptography, applied carefully.",
     items: [
-      ["Argon2id key derivation", "Your master password is stretched with a memory-hard KDF, making brute-force attacks impractical."],
-      ["Two-factor (TOTP)", "Turn on app-based 2FA in a click; logins then require a one-time code."],
-      ["Auto-lock", "The vault locks itself after inactivity, clearing your keys from memory."],
-      ["Open source and auditable", "The full client and server are public, so you can verify the cryptography yourself."],
+      ["bolt", "Argon2id key derivation", "Your master password is stretched with a memory-hard KDF, making brute-force attacks impractical."],
+      ["twofa", "Two-factor (TOTP and passkeys)", "Turn on app-based 2FA or a hardware-backed passkey; logins then require a second factor."],
+      ["lock", "Auto-lock", "The vault locks itself after inactivity, clearing your keys from memory."],
+      ["code", "Open source and auditable", "The full client and server are public, so you can verify the cryptography yourself."],
     ],
   },
   {
     title: "Everyday use",
+    blurb: "Private should not mean painful. The day-to-day features are all here.",
     items: [
-      ["Browser extension", "A popup vault for Chrome and Firefox that stays unlocked between uses."],
-      ["Autofill with domain matching", "Fill credentials on the right site only, with strict host matching that helps resist phishing."],
-      ["Password generator", "Create strong, unique passwords for every account."],
-      ["Self-hostable", "Run the whole thing yourself from a single static Go binary with SQLite."],
+      ["puzzle", "Browser extension", "A popup vault for Chrome and Firefox that stays unlocked between uses."],
+      ["globe", "Autofill with domain matching", "Fill credentials on the right site only, with strict host matching that helps resist phishing."],
+      ["refresh", "Password generator", "Create strong, unique passwords for every account."],
+      ["shield", "Security check", "Find weak, reused, and breached passwords. Breach lookups use k-anonymity, so your passwords never leave the device."],
+      ["smartphone", "Every screen you use", "Web vault, browser extension, desktop app, and an Android app, all end-to-end encrypted."],
+      ["server", "Self-hostable", "Run the whole thing yourself from a single static Go binary."],
     ],
   },
 ];
 ---
 
 <Base title="Features | passwd" active="features">
-  <section class="hero" style="padding-bottom:48px;">
+  <section class="page-head">
     <div class="container">
       <span class="eyebrow">Features</span>
       <h1>Everything you need, nothing you don't.</h1>
-      <p class="lead" style="margin-inline:auto;">
-        Strong by default, private by design, and pleasant to use every day.
-      </p>
+      <p class="lead">Strong by default, private by design, and pleasant to use every day.</p>
     </div>
   </section>
 
   {groups.map((g) => (
-    <section class="block">
+    <section class="block" style="padding-bottom:0;">
       <div class="container">
-        <div class="section-head"><h2>{g.title}</h2></div>
-        <div class="grid">
-          {g.items.map(([title, body]) => (
-            <div class="card">
-              <h3>{title}</h3>
-              <p>{body}</p>
+        <div class="section-head" style="margin-bottom:28px;">
+          <h2>{g.title}</h2>
+          <p class="lead">{g.blurb}</p>
+        </div>
+        <div class="feature-list">
+          {g.items.map(([icon, title, body]) => (
+            <div class="feature-row">
+              <span class="icon"><Icon name={icon} size={19} /></span>
+              <span>
+                <h3>{title}</h3>
+                <p>{body}</p>
+              </span>
             </div>
           ))}
         </div>
@@ -60,12 +70,15 @@ const groups = [
     </section>
   ))}
 
-  <section class="block cta">
-    <div class="container section-head">
-      <h2>Ready to try it?</h2>
-      <div class="hero-actions">
-        <a class="btn btn-primary" href={VAULT_URL}>Create free vault</a>
-        <a class="btn btn-ghost" href="/security">How it works →</a>
+  <section class="block">
+    <div class="container">
+      <div class="cta-box">
+        <h2>Ready to try it?</h2>
+        <p class="lead">Create a vault in your browser now, or grab the app for your platform.</p>
+        <div class="hero-actions" style="justify-content:center;">
+          <a class="btn btn-primary" href={VAULT_URL}>Create free vault</a>
+          <a class="btn btn-ghost" href="/security">How it works</a>
+        </div>
       </div>
     </div>
   </section>

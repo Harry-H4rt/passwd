@@ -64,6 +64,9 @@ jobs:
         env:
           VITE_API_BASE: https://passwd-api-qvyk.onrender.com
           VITE_SITE_URL: https://passwd-site.pages.dev
+          # Shown by the on-screen biometric diagnostic so the installed build
+          # is identifiable at a glance.
+          VITE_BUILD_STAMP: ${{ github.ref_name }}-r${{ github.run_number }}
         run: |
           npm -w @passwd/web run build
           rm -rf apps/mobile/www
